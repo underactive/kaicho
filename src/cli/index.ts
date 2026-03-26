@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { scanCommand } from "./commands/scan.js";
+import { reportCommand } from "./commands/report.js";
 
 const program = new Command();
 
@@ -11,5 +12,6 @@ program
   .version("0.1.0");
 
 program.addCommand(scanCommand);
+program.addCommand(reportCommand);
 
 program.parse();
