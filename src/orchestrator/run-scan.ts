@@ -10,6 +10,7 @@ import { AGENT_CONFIGS } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
+import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
 import { log } from "../logger/index.js";
 
 export interface ScanOptions {
@@ -17,6 +18,8 @@ export interface ScanOptions {
   task: string;
   repoPath: string;
   timeoutMs?: number;
+  scope?: string;
+  files?: string;
 }
 
 export interface MultiScanResult {
@@ -26,7 +29,7 @@ export interface MultiScanResult {
   totalDurationMs: number;
 }
 
-const TASK_PROMPTS: Record<string, () => string> = {
+const TASK_PROMPTS: Record<string, (fileManifest?: string) => string> = {
   security: buildSecurityScanPrompt,
 };
 
@@ -108,7 +111,18 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
     };
   }
 
-  const prompt = buildPrompt();
+  // Resolve file scope
+  const scopedFiles = await resolveScope(absRepoPath, {
+    scope: options.scope,
+    files: options.files,
+  });
+  const fileManifest = scopedFiles ? buildFileManifest(scopedFiles) : undefined;
+
+  if (scopedFiles) {
+    log("info", "Scoped scan", { fileCount: scopedFiles.length });
+  }
+
+  const prompt = buildPrompt(fileManifest);
   const agentsToRun = agent && agent !== "all"
     ? [agent]
     : ALL_AGENT_NAMES;

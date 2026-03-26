@@ -9,6 +9,8 @@ export const scanCommand = new Command("scan")
   .option("--task <task>", "Task to run", "security")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
+  .option("--scope <dirs>", "Limit scan to directories (comma-separated, e.g. src,lib)")
+  .option("--files <patterns>", "Limit scan to file patterns (comma-separated, e.g. *.ts,*.js)")
   .option("--json", "Force JSON output")
   .option("--verbose", "Show detailed output")
   .option("--debug", "Show raw agent output")
@@ -18,6 +20,8 @@ export const scanCommand = new Command("scan")
       task: opts.task as string,
       repoPath: opts.repo as string,
       timeoutMs: parseInt(opts.timeout as string, 10),
+      scope: opts.scope as string | undefined,
+      files: opts.files as string | undefined,
     });
 
     const useJson = opts.json === true || !process.stdout.isTTY;

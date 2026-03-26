@@ -50,8 +50,12 @@ export const SUGGESTIONS_JSON_SCHEMA = {
   additionalProperties: false,
 };
 
-export function buildSecurityScanPrompt(): string {
-  return `You are a security auditor reviewing a codebase. Analyze the code in this repository for security vulnerabilities.
+export function buildSecurityScanPrompt(fileManifest?: string): string {
+  const scopeInstruction = fileManifest
+    ? `\n\nSCOPE: Only review the following files. Do not review files outside this list.\n${fileManifest}\n`
+    : "";
+
+  return `You are a security auditor reviewing a codebase. Analyze the code in this repository for security vulnerabilities.${scopeInstruction}
 
 Focus on:
 - Injection vulnerabilities (SQL, command, path traversal)
