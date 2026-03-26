@@ -1,4 +1,3 @@
-export {
-  SUGGESTIONS_JSON_SCHEMA,
-  buildSecurityScanPrompt,
-} from "./security-scan.js";
+export { SUGGESTIONS_JSON_SCHEMA } from "./shared.js";
+export { buildSecurityScanPrompt } from "./security-scan.js";
+export { buildQaScanPrompt } from "./qa-scan.js";
