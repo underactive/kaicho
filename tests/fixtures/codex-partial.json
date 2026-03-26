@@ -1,0 +1,32 @@
+{
+  "suggestions": [
+    {
+      "file": "src/api/routes.ts",
+      "line": 15,
+      "category": "security",
+      "severity": "high",
+      "rationale": "Missing authentication middleware on admin route.",
+      "suggestedChange": "Add auth middleware: router.use('/admin', requireAuth)"
+    },
+    {
+      "file": "",
+      "line": null,
+      "category": "invalid-category",
+      "severity": "high",
+      "rationale": "This suggestion has invalid data",
+      "suggestedChange": null
+    },
+    {
+      "file": "src/server.ts",
+      "line": 3,
+      "category": "security",
+      "severity": "low",
+      "rationale": "Server listens on 0.0.0.0 which exposes it to all network interfaces.",
+      "suggestedChange": "Bind to 127.0.0.1 for local development."
+    },
+    {
+      "completely": "wrong",
+      "shape": true
+    }
+  ]
+}

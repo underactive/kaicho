@@ -1,0 +1,28 @@
+{
+  "suggestions": [
+    {
+      "file": "src/api/auth.ts",
+      "line": 42,
+      "category": "security",
+      "severity": "critical",
+      "rationale": "User input is concatenated directly into SQL query string, allowing SQL injection attacks.",
+      "suggestedChange": "Use parameterized queries instead of string concatenation: db.query('SELECT * FROM users WHERE id = ?', [userId])"
+    },
+    {
+      "file": "src/config/database.ts",
+      "line": 8,
+      "category": "security",
+      "severity": "high",
+      "rationale": "Database password is hardcoded in the source file. This credential will be exposed in version control.",
+      "suggestedChange": "Move the database password to an environment variable: process.env.DB_PASSWORD"
+    },
+    {
+      "file": "src/utils/crypto.ts",
+      "line": null,
+      "category": "security",
+      "severity": "medium",
+      "rationale": "Using MD5 for password hashing which is cryptographically broken and vulnerable to collision attacks.",
+      "suggestedChange": "Replace MD5 with bcrypt or argon2 for password hashing."
+    }
+  ]
+}
