@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { runScan } from "../../orchestrator/index.js";
+import { filterBySeverity } from "../../dedup/index.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
 import { formatMultiJson } from "../formatters/json.js";
 
@@ -11,6 +12,7 @@ export const scanCommand = new Command("scan")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
   .option("--scope <dirs>", "Limit scan to directories (comma-separated, e.g. src,lib)")
   .option("--files <patterns>", "Limit scan to file patterns (comma-separated, e.g. *.ts,*.js)")
+  .option("--min-severity <level>", "Minimum severity to show (critical, high, medium, low, info)")
   .option("--json", "Force JSON output")
   .option("--verbose", "Show detailed output")
   .option("--debug", "Show raw agent output")
@@ -23,6 +25,10 @@ export const scanCommand = new Command("scan")
       scope: opts.scope as string | undefined,
       files: opts.files as string | undefined,
     });
+
+    if (opts.minSeverity) {
+      multiResult.clusters = filterBySeverity(multiResult.clusters, opts.minSeverity as string);
+    }
 
     const useJson = opts.json === true || !process.stdout.isTTY;
     const formatOpts = {

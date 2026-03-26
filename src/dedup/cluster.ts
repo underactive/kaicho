@@ -28,13 +28,25 @@ export interface SuggestionCluster {
 
 const LINE_PROXIMITY = 5;
 
-const SEVERITY_RANK: Record<string, number> = {
+export const SEVERITY_RANK: Record<string, number> = {
   critical: 0,
   high: 1,
   medium: 2,
   low: 3,
   info: 4,
 };
+
+/**
+ * Filter clusters to only include those at or above a minimum severity.
+ */
+export function filterBySeverity(
+  clusters: SuggestionCluster[],
+  minSeverity: string,
+): SuggestionCluster[] {
+  const threshold = SEVERITY_RANK[minSeverity];
+  if (threshold === undefined) return clusters;
+  return clusters.filter((c) => (SEVERITY_RANK[c.severity] ?? 5) <= threshold);
+}
 
 /**
  * Deduplicate suggestions across agents by clustering nearby findings

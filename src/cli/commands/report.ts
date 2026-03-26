@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
 import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
-import { clusterSuggestions } from "../../dedup/index.js";
+import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
 import { formatMultiJson } from "../formatters/json.js";
 import type { RunResult } from "../../types/index.js";
@@ -15,6 +15,7 @@ export const reportCommand = new Command("report")
   .option("--agent <agent>", "Filter to a specific agent")
   .option("--task <task>", "Filter to a specific task (security, qa, docs)")
   .option("--last <n>", "Show last N runs (default: latest run per agent)")
+  .option("--min-severity <level>", "Minimum severity to show (critical, high, medium, low, info)")
   .option("--json", "Force JSON output")
   .option("--verbose", "Show detailed output")
   .action(async (opts) => {
@@ -86,7 +87,10 @@ export const reportCommand = new Command("report")
       error: r.error,
     }));
 
-    const clusters = clusterSuggestions(results);
+    let clusters = clusterSuggestions(results);
+    if (opts.minSeverity) {
+      clusters = filterBySeverity(clusters, opts.minSeverity as string);
+    }
     const totalSuggestions = results.reduce((sum, r) => sum + r.suggestions.length, 0);
     const totalDurationMs = results.reduce((sum, r) => sum + r.durationMs, 0);
 
