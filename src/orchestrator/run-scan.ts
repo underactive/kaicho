@@ -9,7 +9,7 @@ import {
 } from "../agent-adapters/index.js";
 import { AGENT_CONFIGS } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
-import { buildSecurityScanPrompt, buildQaScanPrompt } from "../prompts/index.js";
+import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
 import { log } from "../logger/index.js";
@@ -33,6 +33,7 @@ export interface MultiScanResult {
 const TASK_PROMPTS: Record<string, (fileManifest?: string) => string> = {
   security: buildSecurityScanPrompt,
   qa: buildQaScanPrompt,
+  docs: buildDocsScanPrompt,
 };
 
 const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
