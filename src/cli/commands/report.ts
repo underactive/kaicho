@@ -13,6 +13,7 @@ export const reportCommand = new Command("report")
   .description("Display results from past scans without re-running agents")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--agent <agent>", "Filter to a specific agent")
+  .option("--task <task>", "Filter to a specific task (security, qa, docs)")
   .option("--last <n>", "Show last N runs (default: latest run per agent)")
   .option("--json", "Force JSON output")
   .option("--verbose", "Show detailed output")
@@ -54,9 +55,12 @@ export const reportCommand = new Command("report")
       }
     }
 
-    // Filter by agent
+    // Filter by agent and task
     if (opts.agent) {
       records = records.filter((r) => r.agent === opts.agent);
+    }
+    if (opts.task) {
+      records = records.filter((r) => r.task === opts.task);
     }
 
     // Get latest run per agent (or last N if specified)
