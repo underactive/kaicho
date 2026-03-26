@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentAdapter, RunResult } from "../types/index.js";
 import {
@@ -90,7 +91,10 @@ async function runSingleAgent(
  */
 export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
   const { agent, task, repoPath, timeoutMs } = options;
-  const absRepoPath = path.resolve(repoPath);
+  const expanded = repoPath.startsWith("~")
+    ? path.join(os.homedir(), repoPath.slice(1))
+    : repoPath;
+  const absRepoPath = path.resolve(expanded);
 
   const buildPrompt = TASK_PROMPTS[task];
   if (!buildPrompt) {
