@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { scanCommand } from "./commands/scan.js";
-import { reportCommand } from "./commands/report.js";
+import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
+import { reportCommand } from "./commands/report.js";
+import { scanCommand } from "./commands/scan.js";
 
 const program = new Command();
 
@@ -12,8 +13,9 @@ program
   .description("Run AI coding agents against repos and collect structured suggestions")
   .version("0.1.0");
 
-program.addCommand(scanCommand);
-program.addCommand(reportCommand);
+program.addCommand(initCommand);
 program.addCommand(listCommand);
+program.addCommand(reportCommand);
+program.addCommand(scanCommand);
 
 program.parse();
