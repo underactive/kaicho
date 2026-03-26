@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { scanCommand } from "./commands/scan.js";
 import { reportCommand } from "./commands/report.js";
+import { listCommand } from "./commands/list.js";
 
 const program = new Command();
 
@@ -13,5 +14,6 @@ program
 
 program.addCommand(scanCommand);
 program.addCommand(reportCommand);
+program.addCommand(listCommand);
 
 program.parse();
