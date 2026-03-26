@@ -1,4 +1,5 @@
 import type { Suggestion, RunResult } from "../../types/index.js";
+import type { MultiScanResult } from "../../orchestrator/index.js";
 
 const NO_COLOR = "NO_COLOR" in process.env;
 
@@ -112,4 +113,55 @@ function sortBySeverity(suggestions: Suggestion[]): Suggestion[] {
   return [...suggestions].sort(
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 5) - (SEVERITY_ORDER[b.severity] ?? 5),
   );
+}
+
+/**
+ * Format results from multiple agents.
+ */
+export function formatMultiHuman(multi: MultiScanResult, options: FormatOptions = {}): void {
+  const out = process.stdout;
+  const duration = (multi.totalDurationMs / 1000).toFixed(1);
+
+  for (const result of multi.results) {
+    const agentLabel = color(`[${result.agent}]`, "\x1b[1m");
+
+    if (result.status === "skipped") {
+      out.write(`\n  ${agentLabel} ${color("skipped", "\x1b[90m")} — not installed\n`);
+      continue;
+    }
+
+    if (result.status !== "success") {
+      out.write(`\n  ${agentLabel} ${color(result.status, "\x1b[31m")} — ${result.error ?? "unknown error"}\n`);
+      if (options.debug && result.rawError) {
+        out.write(`    stderr: ${result.rawError.slice(0, 300)}\n`);
+      }
+      continue;
+    }
+
+    const count = result.suggestions.length;
+    const agentDuration = (result.durationMs / 1000).toFixed(1);
+
+    if (count === 0) {
+      out.write(`\n  ${agentLabel} no suggestions (${agentDuration}s)\n`);
+      continue;
+    }
+
+    out.write(`\n  ${agentLabel} ${count} suggestion${count === 1 ? "" : "s"} (${agentDuration}s)\n`);
+
+    const grouped = groupByFile(result.suggestions);
+    for (const [file, suggestions] of grouped) {
+      out.write(color(`    ${file}\n`, "\x1b[1m"));
+      for (const s of sortBySeverity(suggestions)) {
+        const location = s.line ? `${s.file}:${s.line}` : s.file;
+        out.write(`    ${severityLabel(s.severity)} ${s.category} — ${location}\n`);
+        out.write(`      ${truncate(s.rationale, 90)}\n`);
+        if (s.suggestedChange) {
+          out.write(`      ▸ ${truncate(s.suggestedChange, 90)}\n`);
+        }
+      }
+    }
+  }
+
+  const active = multi.results.filter((r) => r.status !== "skipped");
+  out.write(`\n  ${multi.totalSuggestions} total suggestion${multi.totalSuggestions === 1 ? "" : "s"} from ${active.length} agent${active.length === 1 ? "" : "s"} (${duration}s)\n\n`);
 }

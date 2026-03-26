@@ -1,39 +1,67 @@
 import * as path from "node:path";
 import type { AgentAdapter, RunResult } from "../types/index.js";
-import { CodexAdapter } from "../agent-adapters/index.js";
+import {
+  ClaudeAdapter,
+  CodexAdapter,
+  CursorAdapter,
+  GeminiAdapter,
+} from "../agent-adapters/index.js";
+import { AGENT_CONFIGS } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt } from "../prompts/index.js";
 import { log } from "../logger/index.js";
 
 export interface ScanOptions {
-  agent: string;
+  agent?: string;
   task: string;
   repoPath: string;
   timeoutMs?: number;
+}
+
+export interface MultiScanResult {
+  results: RunResult[];
+  totalSuggestions: number;
+  totalDurationMs: number;
 }
 
 const TASK_PROMPTS: Record<string, () => string> = {
   security: buildSecurityScanPrompt,
 };
 
+const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
+
 function resolveAdapter(agent: string, timeoutMs?: number): AgentAdapter {
+  const opts = timeoutMs ? { timeoutMs } : undefined;
   switch (agent) {
+    case "claude":
+      return new ClaudeAdapter(opts);
     case "codex":
-      return new CodexAdapter(timeoutMs ? { timeoutMs } : undefined);
+      return new CodexAdapter(opts);
+    case "cursor":
+      return new CursorAdapter(opts);
+    case "gemini":
+      return new GeminiAdapter(opts);
     default:
-      throw new Error(`Unknown agent: ${agent}. Available: codex`);
+      throw new Error(
+        `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
+      );
   }
 }
 
-export async function runScan(options: ScanOptions): Promise<RunResult> {
-  const { agent, task, repoPath, timeoutMs } = options;
-  const absRepoPath = path.resolve(repoPath);
-
+/**
+ * Run a single agent scan. Used internally and when --agent is specified.
+ */
+async function runSingleAgent(
+  agent: string,
+  prompt: string,
+  absRepoPath: string,
+  timeoutMs?: number,
+): Promise<RunResult> {
   const adapter = resolveAdapter(agent, timeoutMs);
 
   const available = await adapter.isAvailable();
   if (!available) {
-    log("warn", "Agent not available", { agent });
+    log("warn", "Agent not available, skipping", { agent });
     return {
       agent,
       status: "skipped",
@@ -46,31 +74,77 @@ export async function runScan(options: ScanOptions): Promise<RunResult> {
     };
   }
 
+  log("info", "Running scan", { agent, repoPath: absRepoPath });
+  return adapter.run(absRepoPath, prompt);
+}
+
+/**
+ * Run a scan with one or all agents.
+ * - If `agent` is specified, runs only that agent (returns single-element array).
+ * - If `agent` is omitted or "all", runs all available agents in parallel.
+ */
+export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
+  const { agent, task, repoPath, timeoutMs } = options;
+  const absRepoPath = path.resolve(repoPath);
+
   const buildPrompt = TASK_PROMPTS[task];
   if (!buildPrompt) {
     return {
-      agent,
-      status: "agent-error",
-      suggestions: [],
-      rawOutput: "",
-      rawError: "",
-      durationMs: 0,
-      startedAt: new Date().toISOString(),
-      error: `Unknown task: ${task}. Available: ${Object.keys(TASK_PROMPTS).join(", ")}`,
+      results: [{
+        agent: agent ?? "all",
+        status: "agent-error",
+        suggestions: [],
+        rawOutput: "",
+        rawError: "",
+        durationMs: 0,
+        startedAt: new Date().toISOString(),
+        error: `Unknown task: ${task}. Available: ${Object.keys(TASK_PROMPTS).join(", ")}`,
+      }],
+      totalSuggestions: 0,
+      totalDurationMs: 0,
     };
   }
 
   const prompt = buildPrompt();
-  log("info", "Running scan", { agent, task, repoPath: absRepoPath });
+  const agentsToRun = agent && agent !== "all"
+    ? [agent]
+    : ALL_AGENT_NAMES;
 
-  const result = await adapter.run(absRepoPath, prompt);
+  const startMs = Date.now();
 
+  // Run all agents in parallel
+  const settled = await Promise.allSettled(
+    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs)),
+  );
+
+  const results: RunResult[] = settled.map((s, i) => {
+    if (s.status === "fulfilled") return s.value;
+    // Promise.allSettled rejection — should not happen since adapters never throw
+    return {
+      agent: agentsToRun[i] ?? "unknown",
+      status: "agent-error" as const,
+      suggestions: [],
+      rawOutput: "",
+      rawError: String(s.reason),
+      durationMs: Date.now() - startMs,
+      startedAt: new Date().toISOString(),
+      error: `Unexpected rejection: ${String(s.reason)}`,
+    };
+  });
+
+  // Save each result
   const store = new JsonStore(absRepoPath);
-  try {
-    await store.save(result, task, absRepoPath);
-  } catch (err) {
-    log("error", "Failed to save run result", { error: String(err) });
+  for (const result of results) {
+    if (result.status === "skipped") continue;
+    try {
+      await store.save(result, task, absRepoPath);
+    } catch (err) {
+      log("error", "Failed to save run result", { agent: result.agent, error: String(err) });
+    }
   }
 
-  return result;
+  const totalSuggestions = results.reduce((sum, r) => sum + r.suggestions.length, 0);
+  const totalDurationMs = Date.now() - startMs;
+
+  return { results, totalSuggestions, totalDurationMs };
 }

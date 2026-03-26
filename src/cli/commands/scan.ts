@@ -1,11 +1,11 @@
 import { Command } from "commander";
 import { runScan } from "../../orchestrator/index.js";
-import { formatHuman } from "../formatters/human.js";
-import { formatJson } from "../formatters/json.js";
+import { formatHuman, formatMultiHuman } from "../formatters/human.js";
+import { formatMultiJson } from "../formatters/json.js";
 
 export const scanCommand = new Command("scan")
   .description("Run an agent scan against a repository")
-  .option("--agent <agent>", "Agent to use", "codex")
+  .option("--agent <agent>", "Agent to use (omit for all available)")
   .option("--task <task>", "Task to run", "security")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
@@ -13,23 +13,27 @@ export const scanCommand = new Command("scan")
   .option("--verbose", "Show detailed output")
   .option("--debug", "Show raw agent output")
   .action(async (opts) => {
-    const result = await runScan({
-      agent: opts.agent as string,
+    const multiResult = await runScan({
+      agent: opts.agent as string | undefined,
       task: opts.task as string,
       repoPath: opts.repo as string,
       timeoutMs: parseInt(opts.timeout as string, 10),
     });
 
     const useJson = opts.json === true || !process.stdout.isTTY;
+    const formatOpts = {
+      verbose: opts.verbose === true,
+      debug: opts.debug === true,
+    };
 
     if (useJson) {
-      formatJson(result);
+      formatMultiJson(multiResult);
+    } else if (multiResult.results.length === 1 && multiResult.results[0]) {
+      formatHuman(multiResult.results[0], formatOpts);
     } else {
-      formatHuman(result, {
-        verbose: opts.verbose === true,
-        debug: opts.debug === true,
-      });
+      formatMultiHuman(multiResult, formatOpts);
     }
 
-    process.exit(result.status === "success" ? 0 : 1);
+    const hasSuccess = multiResult.results.some((r) => r.status === "success");
+    process.exit(hasSuccess ? 0 : 1);
   });

@@ -103,6 +103,109 @@ export function parseFromJsonl(stdout: string): ParseResult {
 }
 
 /**
+ * Parse suggestions from freeform text that may contain JSON.
+ * Used for agents without schema enforcement (Cursor, Gemini).
+ * Tries: direct JSON.parse, markdown code fences, brace/bracket extraction.
+ */
+export function parseFromText(text: string): ParseResult {
+  if (!text.trim()) {
+    return { suggestions: [], rejected: 0, errors: ["Empty text response"] };
+  }
+
+  // Try direct JSON.parse first (agent returned pure JSON)
+  try {
+    const parsed = JSON.parse(text);
+    const raw = extractSuggestionsArray(parsed);
+    if (raw) return validateSuggestions(raw);
+  } catch {
+    // Not pure JSON, try extraction
+  }
+
+  // Try extracting from markdown code fences: ```json ... ``` or ``` ... ```
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (fenceMatch?.[1]) {
+    try {
+      const parsed = JSON.parse(fenceMatch[1]);
+      const raw = extractSuggestionsArray(parsed);
+      if (raw) return validateSuggestions(raw);
+    } catch {
+      // Fenced content isn't valid JSON
+    }
+  }
+
+  // Try finding the outermost JSON object or array in the text
+  const jsonStr = extractOutermostJson(text);
+  if (jsonStr) {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const raw = extractSuggestionsArray(parsed);
+      if (raw) return validateSuggestions(raw);
+    } catch {
+      // Extracted text isn't valid JSON
+    }
+  }
+
+  return { suggestions: [], rejected: 0, errors: ["No JSON found in text response"] };
+}
+
+/**
+ * Find the outermost `{...}` or `[...]` in a string by tracking brace depth.
+ * Returns the matched substring or null.
+ */
+function extractOutermostJson(text: string): string | null {
+  // Find whichever opener comes first in the text
+  const braceIdx = text.indexOf("{");
+  const bracketIdx = text.indexOf("[");
+  const candidates: Array<[string, string]> = [];
+  if (braceIdx !== -1 && bracketIdx !== -1) {
+    candidates.push(
+      bracketIdx < braceIdx ? ["[", "]"] : ["{", "}"],
+      bracketIdx < braceIdx ? ["{", "}"] : ["[", "]"],
+    );
+  } else if (braceIdx !== -1) {
+    candidates.push(["{", "}"]);
+  } else if (bracketIdx !== -1) {
+    candidates.push(["[", "]"]);
+  }
+
+  for (const [openChar, closeChar] of candidates) {
+    const startIdx = text.indexOf(openChar);
+    if (startIdx === -1) continue;
+
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startIdx; i < text.length; i++) {
+      const ch = text[i];
+
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+
+      if (ch === openChar) depth++;
+      if (ch === closeChar) depth--;
+
+      if (depth === 0) {
+        return text.slice(startIdx, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Extract a suggestions array from various response shapes:
  * - `{ suggestions: [...] }`
  * - `[...]` (bare array)

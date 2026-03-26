@@ -1,1 +1,1 @@
-export { runScan, type ScanOptions } from "./run-scan.js";
+export { runScan, type ScanOptions, type MultiScanResult } from "./run-scan.js";

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { parseFromFile, parseFromJsonl } from "./suggestion-parser.js";
+import { parseFromFile, parseFromJsonl, parseFromText } from "./suggestion-parser.js";
 
 const fixturesDir = path.resolve(import.meta.dirname, "../../tests/fixtures");
 
@@ -133,5 +133,59 @@ describe("parseFromJsonl", () => {
     const result = parseFromJsonl("");
     expect(result.suggestions).toHaveLength(0);
     expect(result.errors).toContain("Empty JSONL stream");
+  });
+});
+
+const VALID_SUGGESTION = {
+  file: "app.ts",
+  line: 10,
+  category: "security",
+  severity: "high",
+  rationale: "SQL injection risk",
+  suggestedChange: "Use parameterized queries",
+};
+
+describe("parseFromText", () => {
+  it("parses pure JSON text", () => {
+    const text = JSON.stringify({ suggestions: [VALID_SUGGESTION] });
+    const result = parseFromText(text);
+    expect(result.suggestions).toHaveLength(1);
+  });
+
+  it("extracts JSON from markdown code fence", () => {
+    const text = `Here are my findings:\n\n\`\`\`json\n${JSON.stringify({ suggestions: [VALID_SUGGESTION] }, null, 2)}\n\`\`\`\n\nLet me know if you need more details.`;
+    const result = parseFromText(text);
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]?.severity).toBe("high");
+  });
+
+  it("extracts JSON from unmarked code fence", () => {
+    const text = `Results:\n\`\`\`\n${JSON.stringify({ suggestions: [VALID_SUGGESTION] })}\n\`\`\``;
+    const result = parseFromText(text);
+    expect(result.suggestions).toHaveLength(1);
+  });
+
+  it("extracts JSON object embedded in prose", () => {
+    const text = `I found the following issues: {"suggestions": [${JSON.stringify(VALID_SUGGESTION)}]} and that's all.`;
+    const result = parseFromText(text);
+    expect(result.suggestions).toHaveLength(1);
+  });
+
+  it("handles empty text", () => {
+    const result = parseFromText("");
+    expect(result.suggestions).toHaveLength(0);
+    expect(result.errors).toContain("Empty text response");
+  });
+
+  it("handles text with no JSON", () => {
+    const result = parseFromText("I found no security issues in this codebase.");
+    expect(result.suggestions).toHaveLength(0);
+    expect(result.errors).toContain("No JSON found in text response");
+  });
+
+  it("handles bare array in text", () => {
+    const text = `Here: [${JSON.stringify(VALID_SUGGESTION)}]`;
+    const result = parseFromText(text);
+    expect(result.suggestions).toHaveLength(1);
   });
 });

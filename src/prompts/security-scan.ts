@@ -72,5 +72,9 @@ For each finding, provide:
 - suggestedChange: a concrete fix or mitigation (if applicable, otherwise null)
 
 Be specific. Reference actual code. Do not invent files that do not exist.
-If you find no security issues, return an empty suggestions array.`;
+If you find no security issues, return an empty suggestions array.
+
+IMPORTANT: Return your response as a JSON object with this exact structure:
+{"suggestions": [{"file": "...", "line": ..., "category": "...", "severity": "...", "rationale": "...", "suggestedChange": "..."}]}
+Return ONLY the JSON object, no other text.`;
 }

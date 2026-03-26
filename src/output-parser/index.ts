@@ -1,1 +1,1 @@
-export { parseFromFile, parseFromJsonl, type ParseResult } from "./suggestion-parser.js";
+export { parseFromFile, parseFromJsonl, parseFromText, type ParseResult } from "./suggestion-parser.js";
