@@ -39,8 +39,12 @@ suggestions. Everything in this repo serves that loop.
 
 1. Read this file first for orientation.
 2. Check the relevant section in the table above for your task domain.
-3. For complex work, check [docs/exec-plans/active/](docs/exec-plans/active/)
-   for an existing plan before starting new work.
+3. For complex work (3+ domains, sequential dependencies, non-obvious
+   decisions, or multi-session scope), check
+   [docs/exec-plans/active/](docs/exec-plans/active/) for an existing plan.
+   If none exists, **create one** using the template in
+   [docs/PLANS.md](docs/PLANS.md) before starting implementation.
+   Update [docs/PLANS.md](docs/PLANS.md) index when adding or completing plans.
 4. Run `npm test` before opening a PR. Run `npm run lint` to catch structural
    violations.
 5. If you add a new domain or package, update ARCHITECTURE.md.

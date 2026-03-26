@@ -8,14 +8,17 @@ description or a task tool).
 
 | Plan | Goal | Owner | Started |
 |------|------|-------|---------|
-| (none yet) | — | — | — |
+| (none) | — | — | — |
 
 See [exec-plans/active/](exec-plans/active/) for full plan documents.
 
 ## Completed plans
 
-See [exec-plans/completed/](exec-plans/completed/) for historical plans with
-decision logs.
+| Plan | Goal | Completed |
+|------|------|-----------|
+| [Phase 0](exec-plans/completed/phase-0-core-loop.md) | Core loop + multi-agent orchestration | 2026-03-26 |
+
+See [exec-plans/completed/](exec-plans/completed/) for full plan documents.
 
 ## Creating a plan
 
