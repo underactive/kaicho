@@ -9,6 +9,7 @@ import {
 import { AGENT_CONFIGS } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt } from "../prompts/index.js";
+import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { log } from "../logger/index.js";
 
 export interface ScanOptions {
@@ -20,6 +21,7 @@ export interface ScanOptions {
 
 export interface MultiScanResult {
   results: RunResult[];
+  clusters: SuggestionCluster[];
   totalSuggestions: number;
   totalDurationMs: number;
 }
@@ -100,6 +102,7 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
         startedAt: new Date().toISOString(),
         error: `Unknown task: ${task}. Available: ${Object.keys(TASK_PROMPTS).join(", ")}`,
       }],
+      clusters: [],
       totalSuggestions: 0,
       totalDurationMs: 0,
     };
@@ -143,8 +146,9 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
     }
   }
 
+  const clusters = clusterSuggestions(results);
   const totalSuggestions = results.reduce((sum, r) => sum + r.suggestions.length, 0);
   const totalDurationMs = Date.now() - startMs;
 
-  return { results, totalSuggestions, totalDurationMs };
+  return { results, clusters, totalSuggestions, totalDurationMs };
 }

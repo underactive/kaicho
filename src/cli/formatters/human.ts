@@ -1,5 +1,6 @@
 import type { Suggestion, RunResult } from "../../types/index.js";
 import type { MultiScanResult } from "../../orchestrator/index.js";
+import type { SuggestionCluster } from "../../dedup/index.js";
 
 const NO_COLOR = "NO_COLOR" in process.env;
 
@@ -116,52 +117,71 @@ function sortBySeverity(suggestions: Suggestion[]): Suggestion[] {
 }
 
 /**
- * Format results from multiple agents.
+ * Format results from multiple agents, showing clustered/deduplicated view.
  */
 export function formatMultiHuman(multi: MultiScanResult, options: FormatOptions = {}): void {
   const out = process.stdout;
   const duration = (multi.totalDurationMs / 1000).toFixed(1);
 
+  // Agent status summary
   for (const result of multi.results) {
     const agentLabel = color(`[${result.agent}]`, "\x1b[1m");
-
-    if (result.status === "skipped") {
-      out.write(`\n  ${agentLabel} ${color("skipped", "\x1b[90m")} — not installed\n`);
-      continue;
-    }
-
-    if (result.status !== "success") {
-      out.write(`\n  ${agentLabel} ${color(result.status, "\x1b[31m")} — ${result.error ?? "unknown error"}\n`);
-      if (options.debug && result.rawError) {
-        out.write(`    stderr: ${result.rawError.slice(0, 300)}\n`);
-      }
-      continue;
-    }
-
-    const count = result.suggestions.length;
     const agentDuration = (result.durationMs / 1000).toFixed(1);
 
-    if (count === 0) {
-      out.write(`\n  ${agentLabel} no suggestions (${agentDuration}s)\n`);
-      continue;
-    }
-
-    out.write(`\n  ${agentLabel} ${count} suggestion${count === 1 ? "" : "s"} (${agentDuration}s)\n`);
-
-    const grouped = groupByFile(result.suggestions);
-    for (const [file, suggestions] of grouped) {
-      out.write(color(`    ${file}\n`, "\x1b[1m"));
-      for (const s of sortBySeverity(suggestions)) {
-        const location = s.line ? `${s.file}:${s.line}` : s.file;
-        out.write(`    ${severityLabel(s.severity)} ${s.category} — ${location}\n`);
-        out.write(`      ${truncate(s.rationale, 90)}\n`);
-        if (s.suggestedChange) {
-          out.write(`      ▸ ${truncate(s.suggestedChange, 90)}\n`);
-        }
-      }
+    if (result.status === "skipped") {
+      out.write(`  ${agentLabel} ${color("skipped", "\x1b[90m")} — not installed\n`);
+    } else if (result.status !== "success") {
+      out.write(`  ${agentLabel} ${color(result.status, "\x1b[31m")} — ${result.error ?? "unknown error"}\n`);
+    } else {
+      const count = result.suggestions.length;
+      out.write(`  ${agentLabel} ${count} suggestion${count === 1 ? "" : "s"} (${agentDuration}s)\n`);
     }
   }
 
+  // Clustered findings
+  if (multi.clusters.length === 0) {
+    out.write(`\n  No findings.\n\n`);
+    return;
+  }
+
+  out.write(`\n`);
+
+  for (const cluster of multi.clusters) {
+    formatCluster(out, cluster, options);
+  }
+
   const active = multi.results.filter((r) => r.status !== "skipped");
-  out.write(`\n  ${multi.totalSuggestions} total suggestion${multi.totalSuggestions === 1 ? "" : "s"} from ${active.length} agent${active.length === 1 ? "" : "s"} (${duration}s)\n\n`);
+  const multiAgent = multi.clusters.filter((c) => c.agreement > 1).length;
+
+  out.write(`  ${multi.clusters.length} finding${multi.clusters.length === 1 ? "" : "s"}`);
+  if (multiAgent > 0) {
+    out.write(` (${multiAgent} confirmed by multiple agents)`);
+  }
+  out.write(` from ${active.length} agent${active.length === 1 ? "" : "s"} (${duration}s)\n\n`);
+}
+
+function formatCluster(
+  out: NodeJS.WriteStream,
+  cluster: SuggestionCluster,
+  options: FormatOptions,
+): void {
+  const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
+  const agentTags = cluster.agents.map((a) => color(a, "\x1b[90m")).join(", ");
+  const agreementBadge = cluster.agreement > 1
+    ? color(` ${cluster.agreement}x`, "\x1b[32m")
+    : "";
+
+  out.write(`  ${severityLabel(cluster.severity)} ${cluster.category} — ${location}${agreementBadge}\n`);
+  out.write(`  ${color("agents:", "\x1b[90m")} ${agentTags}\n`);
+
+  for (const r of cluster.rationales) {
+    const prefix = color(`${r.agent}:`, "\x1b[90m");
+    out.write(`    ${prefix} ${truncate(r.rationale, 85)}\n`);
+  }
+
+  if (cluster.suggestedChange) {
+    out.write(`    ▸ ${truncate(cluster.suggestedChange, 90)}\n`);
+  }
+
+  out.write("\n");
 }
