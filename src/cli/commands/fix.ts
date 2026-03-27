@@ -79,7 +79,11 @@ export const fixCommand = new Command("fix")
       agentName = cluster.agents[0] ?? "claude";
     }
 
-    process.stdout.write(`\n  Fixing ${color(`[${cluster.severity}]`, "\x1b[33m")} ${location} with ${color(agentName, "\x1b[1m")}...\n\n`);
+    process.stdout.write(`\n  Fixing ${color(cluster.id, "\x1b[90m")} ${color(`[${cluster.severity}]`, "\x1b[33m")} ${location} with ${color(agentName, "\x1b[1m")}...\n`);
+    if (cluster.summary) {
+      process.stdout.write(`  ${color(cluster.summary, "\x1b[37m")}\n`);
+    }
+    process.stdout.write("\n");
 
     const result = await runFix({
       repoPath: rawRepo,
