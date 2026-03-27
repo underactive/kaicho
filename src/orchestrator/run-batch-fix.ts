@@ -48,7 +48,7 @@ export interface BatchFixProgress {
   total: number;
   clusterId: string;
   file: string;
-  step: "starting" | "running-agent" | "applied" | "no-changes" | "failed" | "skipped" | "batch-done";
+  step: "starting" | "running-agent" | "applied" | "no-changes" | "failed" | "skipped" | "conflict" | "batch-done";
   agent?: string;
   filesChanged?: number;
   error?: string;
@@ -120,10 +120,29 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
   let totalApplied = 0;
   let totalSkipped = 0;
   let totalFailed = 0;
+  const modifiedFiles = new Set<string>();
 
   try {
     for (let i = 0; i < clusters.length; i++) {
-      const cluster = clusters[i]!;
+      const cluster = clusters[i]!
+
+      // Conflict detection: skip if this cluster's file was already modified
+      if (modifiedFiles.has(cluster.file)) {
+        const item: BatchFixItemResult = {
+          clusterId: cluster.id,
+          file: cluster.file,
+          agent: pickAgent(cluster, options.agent),
+          status: "skipped",
+          filesChanged: 0,
+          durationMs: 0,
+          diff: "",
+          error: `Conflict: ${cluster.file} was already modified by a previous fix`,
+        };
+        items.push(item);
+        totalSkipped++;
+        notify({ current: i + 1, total: clusters.length, clusterId: cluster.id, file: cluster.file, step: "conflict", error: item.error });
+        continue;
+      };
       const agentName = pickAgent(cluster, options.agent);
       const fixStartMs = Date.now();
 
@@ -219,6 +238,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       };
       items.push(item);
       totalApplied++;
+      modifiedFiles.add(cluster.file);
 
       await recordFix(absRepoPath, {
         clusterId: cluster.id,

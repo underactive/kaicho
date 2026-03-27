@@ -8,7 +8,8 @@ import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { applyEnrichedCache } from "./enrich.js";
 import { getFixedClusterIds } from "../../fix-log/index.js";
-import { runFix, resolveFixBranch, runBatchFix, type FixProgress, type BatchFixItemResult, type BatchFixAction } from "../../orchestrator/index.js";
+import { runFix, resolveFixBranch, runBatchFix, runValidation, type FixProgress, type BatchFixItemResult, type BatchFixAction } from "../../orchestrator/index.js";
+import { loadConfig } from "../../config/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
 
@@ -28,6 +29,7 @@ export const fixCommand = new Command("fix")
   .option("--task <task>", "Filter scan results by task type")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
   .option("--min-severity <level>", "Minimum severity to show")
+  .option("--validate", "Run a second agent to review each fix before keeping")
   .option("--batch", "Fix all findings on one branch (continue/skip/stop after each)")
   .option("--auto", "Batch fix without confirmations")
   .action(async (opts) => {
@@ -147,6 +149,30 @@ export const fixCommand = new Command("fix")
 
     if (result.diff) {
       process.stdout.write(result.diff + "\n\n");
+    }
+
+    // Validate with a second agent if requested
+    if (opts.validate && result.diff) {
+      const config = await loadConfig(repoPath);
+      process.stdout.write(`  ${color("Validating...", "\x1b[90m")}\n`);
+      const validation = await runValidation({
+        repoPath: rawRepo,
+        cluster,
+        diff: result.diff,
+        fixAgent: agentName,
+        timeoutMs: parseInt(opts.timeout as string, 10),
+        models: config.models,
+      });
+
+      if (validation.verdict === "approve") {
+        process.stdout.write(`  ${color("Approved", "\x1b[32m")} by ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
+      } else if (validation.verdict === "concern") {
+        process.stdout.write(`  ${color("Concern", "\x1b[33m")} from ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
+      } else if (validation.verdict === "skipped") {
+        process.stdout.write(`  ${color("Validation skipped:", "\x1b[90m")} ${validation.rationale}\n\n`);
+      } else {
+        process.stdout.write(`  ${color("Validation error:", "\x1b[31m")} ${validation.rationale}\n\n`);
+      }
     }
 
     // Ask user what to do
@@ -294,8 +320,13 @@ async function handleBatchFix(
   const out = process.stdout;
   const isTTY = process.stderr.isTTY;
   const isAuto = opts["auto"] === true;
+  const doValidate = opts["validate"] === true;
+  const repoPath = rawRepo.startsWith("~")
+    ? path.join(os.homedir(), rawRepo.slice(1))
+    : path.resolve(rawRepo);
+  const config = doValidate ? await loadConfig(repoPath) : undefined;
 
-  out.write(`\n  Batch fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"}${isAuto ? " (auto mode)" : ""}...\n\n`);
+  out.write(`\n  Batch fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"}${isAuto ? " (auto mode)" : ""}${doValidate ? " + validation" : ""}...\n\n`);
 
   try {
     const result = await runBatchFix({
@@ -314,6 +345,8 @@ async function handleBatchFix(
             out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("applied", "\x1b[32m")} (${p.filesChanged} file${p.filesChanged === 1 ? "" : "s"})\n`);
           } else if (p.step === "no-changes") {
             out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("no changes", "\x1b[33m")}\n`);
+          } else if (p.step === "conflict") {
+            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("conflict", "\x1b[33m")} — ${p.file} already modified\n`);
           } else if (p.step === "failed") {
             out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("failed", "\x1b[31m")} — ${p.error}\n`);
           }
@@ -321,10 +354,35 @@ async function handleBatchFix(
           process.stderr.write(JSON.stringify({ type: "batch-fix.progress", ...p }) + "\n");
         }
       },
-      onConfirm: isAuto ? undefined : async (item, cluster, current, total) => {
+      onConfirm: isAuto && !doValidate ? undefined : async (item, cluster, current, total) => {
         if (item.diff) {
           out.write(`\n${item.diff}\n`);
         }
+
+        // Validate if requested
+        if (doValidate && item.diff && item.status === "applied") {
+          out.write(`  ${color("Validating...", "\x1b[90m")}\n`);
+          const validation = await runValidation({
+            repoPath: rawRepo,
+            cluster,
+            diff: item.diff,
+            fixAgent: item.agent,
+            timeoutMs: parseInt((opts["timeout"] as string) ?? "300000", 10),
+            models: config?.models,
+          });
+
+          if (validation.verdict === "approve") {
+            out.write(`  ${color("Approved", "\x1b[32m")} by ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
+          } else if (validation.verdict === "concern") {
+            out.write(`  ${color("Concern", "\x1b[33m")} from ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
+            // In auto mode, skip fixes with concerns
+            if (isAuto) return "skip";
+          } else {
+            out.write(`  ${color("Validation:", "\x1b[90m")} ${validation.rationale}\n\n`);
+          }
+        }
+
+        if (isAuto) return "continue";
         return promptBatchAction(current, total);
       },
     });

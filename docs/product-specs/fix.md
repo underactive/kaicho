@@ -35,8 +35,18 @@ writing the code myself.
 - Summary at the end: N applied, N skipped, N failed
 - One branch to merge: `kaicho/fix-<hash>`
 
+## Validation (Phase C)
+
+- `--validate` dispatches a second agent to review the diff after each fix
+- Reviewer is a different agent from the fixer (prefers agents that found the issue)
+- Verdict: approve or concern, with rationale
+- Single fix: shows validation before keep/discard prompt
+- Batch fix: shows validation after each fix diff
+- `--auto --validate`: auto-skips fixes that receive "concern" verdict
+- Skips validation if only one agent is installed
+- Conflict detection: in batch mode, skips fixes targeting already-modified files
+
 ## Not in scope
 
 - Auto-merging the fix branch
-- Cross-agent validation of fixes (Phase C)
 - Freeform fix instructions (not from scan results)
