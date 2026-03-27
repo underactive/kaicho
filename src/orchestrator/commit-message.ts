@@ -14,7 +14,7 @@ import type { SuggestionCluster } from "../dedup/index.js";
  *
  *   Suggested change: <suggestedChange>
  *
- *   Applied by kaicho fix via <agent>
+ *   Applied by Kaichō via <agent>
  */
 export function buildCommitMessage(cluster: SuggestionCluster, agent: string): string {
   const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
@@ -40,7 +40,8 @@ export function buildCommitMessage(cluster: SuggestionCluster, agent: string): s
     lines.push("", `Suggested change: ${cluster.suggestedChange}`);
   }
 
-  lines.push("", `Applied by kaicho fix via ${agent}`);
+  const agentDisplay = agent.charAt(0).toUpperCase() + agent.slice(1);
+  lines.push("", `Applied by Kaichō via ${agentDisplay}`);
 
   return lines.join("\n");
 }

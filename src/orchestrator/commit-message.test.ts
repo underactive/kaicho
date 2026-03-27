@@ -86,6 +86,6 @@ describe("buildCommitMessage", () => {
 
   it("includes applied-by footer", () => {
     const msg = buildCommitMessage(makeCluster(), "codex");
-    expect(msg).toContain("Applied by kaicho fix via codex");
+    expect(msg).toContain("Applied by Kaichō via Codex");
   });
 });

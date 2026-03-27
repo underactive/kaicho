@@ -1,5 +1,44 @@
 import type { SuggestionCluster } from "../dedup/index.js";
 
+const CATEGORY_SCOPE: Record<string, { scope: string; outOfScope: string; unrelated: string }> = {
+  security: {
+    scope: "Eliminate the specific vulnerability or unsafe pattern",
+    outOfScope: "Code style, performance optimizations, documentation gaps, unrelated refactors",
+    unrelated: "style, performance, maintainability, or documentation",
+  },
+  bug: {
+    scope: "Fix the incorrect behavior described in the finding",
+    outOfScope: "Code style, security hardening beyond the bug, performance tuning, documentation",
+    unrelated: "style, security, performance, or documentation",
+  },
+  performance: {
+    scope: "Address the specific performance issue (latency, memory, CPU)",
+    outOfScope: "Code style, unrelated security concerns, documentation, feature changes",
+    unrelated: "style, security, maintainability, or documentation",
+  },
+  maintainability: {
+    scope: "Improve the specific maintainability issue (complexity, coupling, readability)",
+    outOfScope: "Performance tuning, security hardening, feature changes, documentation",
+    unrelated: "performance, security, style, or documentation",
+  },
+  style: {
+    scope: "Fix the specific style or formatting issue",
+    outOfScope: "Logic changes, security, performance, documentation",
+    unrelated: "security, performance, maintainability, or documentation",
+  },
+  documentation: {
+    scope: "Fix the specific documentation issue (missing, outdated, or incorrect docs)",
+    outOfScope: "Code logic changes, style fixes, security, performance",
+    unrelated: "security, performance, maintainability, or style",
+  },
+};
+
+const DEFAULT_SCOPE = {
+  scope: "Fix the specific issue described in the finding",
+  outOfScope: "Unrelated concerns outside the stated category",
+  unrelated: "other categories",
+};
+
 /**
  * Build a prompt that asks a reviewer agent to evaluate a fix diff.
  * The reviewer should return a structured verdict.
@@ -16,6 +55,8 @@ export function buildValidationPrompt(
   const rationaleSection = cluster.rationales
     .map((r) => `- ${r.agent}: ${r.rationale}`)
     .join("\n");
+
+  const catScope = CATEGORY_SCOPE[cluster.category] ?? DEFAULT_SCOPE;
 
   return `You are a code reviewer validating a fix applied by another AI agent.
 
@@ -34,13 +75,20 @@ ${diff}
 ${fixerContext ? `
 FIXER'S DECISION CONTEXT:
 ${fixerContext}
-
-Review the fix ONLY against the stated problem and the fixer's constraints above.
 ` : ""}
+## Review Context
+- Issue type: ${cluster.category}
+- Scope: ${catScope.scope}
+- Out of scope: ${catScope.outOfScope}
+
+Evaluate ONLY whether the fix resolves the stated issue without introducing a new defect of the same category.
+
+A ${cluster.category} fix should NOT be rejected for concerns about ${catScope.unrelated}.
+
 Your ONLY job is to determine:
-1. Does this change fix the reported issue? (yes/no)
+1. Does this change fix the reported ${cluster.category} issue? (yes/no)
 2. Does it introduce a regression or break existing tests? (yes/no)
-3. Is there a security vulnerability? (yes/no)
+3. Does it introduce a NEW critical defect within ${cluster.category}? (yes/no)
 
 If all answers are satisfactory, you MUST approve.
 Do NOT comment on style, alternative approaches, or hypothetical edge cases.
