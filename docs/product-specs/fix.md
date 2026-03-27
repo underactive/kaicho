@@ -39,12 +39,39 @@ writing the code myself.
 
 - `--validate` dispatches a second agent to review the diff after each fix
 - Reviewer is a different agent from the fixer (prefers agents that found the issue)
+- `--reviewer <agent>` overrides auto-pick (also settable in `kaicho.config.json`)
 - Verdict: approve or concern, with rationale
 - Single fix: shows validation before keep/discard prompt
 - Batch fix: shows validation after each fix diff
 - `--auto --validate`: auto-skips fixes that receive "concern" verdict
 - Skips validation if only one agent is installed
 - Conflict detection: in batch mode, skips fixes targeting already-modified files
+- Validation prompt is category-scoped — reviewer can only reject for issues
+  within the fix's category (a security fix can't be rejected for style concerns)
+
+## Retry with reviewer
+
+- When validation raises a concern, user can press `r` to retry
+- Batch fix: `c/s/x/r` prompt after concern; single fix: `k/d/r` prompt
+- Retry reverts the failed commit (`git reset --hard HEAD~1`), then runs
+  the reviewer agent in fix mode with three-context prompt: original finding,
+  failed diff, and the reviewer's concern
+- One retry max — after retry, prompt shows `c/s/x` (batch) or `k/d` (single)
+- Retry result is also validated (by a different agent)
+
+## Fixer context
+
+- Fix prompt asks the agent to output a `<FIX_CONTEXT>` block after applying
+  changes: approach chosen, alternatives rejected, tradeoffs accepted
+- Extracted from raw output and forwarded to the reviewer
+- Reviewer sees fixer's reasoning, reducing false concerns from scope mismatch
+- Graceful fallback if agent doesn't include the block
+
+## Verbose mode
+
+- `--verbose` streams agent stderr to the terminal in real-time
+- Useful for debugging stuck agents (e.g., waiting for plan approval)
+- Agent output is still captured for error diagnostics
 
 ## Not in scope
 

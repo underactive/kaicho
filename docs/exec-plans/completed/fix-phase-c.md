@@ -1,8 +1,9 @@
 # Plan: Fix Phase C — Validation + Conflict Detection
 
 **Goal:** Add a `--validate` flag that dispatches a second agent to review the fix diff, and detect conflicting fixes in batch mode.
-**Status:** Active
+**Status:** Completed
 **Started:** 2026-03-27
+**Completed:** 2026-03-27
 
 ## Context
 

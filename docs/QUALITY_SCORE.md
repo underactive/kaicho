@@ -18,18 +18,18 @@ cleanup and investment.
 
 | Domain            | Grade | Notes                                          | Last reviewed |
 |-------------------|-------|-------------------------------------------------|---------------|
-| `agent-adapters`  | A     | 4 adapters, 25 tests, never-throw contract      | 2026-03-26    |
+| `agent-adapters`  | A     | 4 adapters, 25 tests, verbose stderr, non-interactive flags | 2026-03-27 |
 | `output-parser`   | A     | 3 parse paths, per-item validation, 15 tests    | 2026-03-26    |
 | `suggestion-store`| A     | Symlink/traversal protection, 6 tests           | 2026-03-26    |
 | `dedup`           | A     | Proximity clustering, severity filter, 12 tests | 2026-03-26    |
 | `scope`           | A     | git ls-files + fallback, glob matching, 9 tests | 2026-03-26    |
-| `orchestrator`    | A-    | Scan + fix + batch-fix, 27 tests (commit-msg, scan, fix) | 2026-03-27 |
+| `orchestrator`    | A     | Scan + fix + batch-fix + retry + validation, shared resolveAdapter, 27 tests | 2026-03-27 |
 | `cli`             | A-    | 6 commands, 2 formatters, 12 formatter tests      | 2026-03-27    |
 | `config`          | B+    | Config load + merge works, no tests (simple)     | 2026-03-26    |
-| `prompts`         | A-    | 3 scan tasks + fix prompt, 6 tests               | 2026-03-26    |
+| `prompts`         | A     | 3 scan + fix + retry + validate (category-scoped), 14 tests | 2026-03-27 |
 | `logger`          | B+    | Minimal structured logger, no tests (trivial)    | 2026-03-26    |
 | `types`           | A     | Zod schemas, AgentMode, clean interfaces         | 2026-03-26    |
-| `branch`          | B+    | Create/diff/commit/discard, 3 tests              | 2026-03-26    |
+| `branch`          | A-    | Create/diff/commit/discard/reset, 4 tests         | 2026-03-27    |
 | `fix-log`         | B+    | Self-pruning fix tracker, no tests               | 2026-03-26    |
 | `summarizer`      | B+    | Ollama integration, graceful fallback, no tests  | 2026-03-26    |
 | `repo-context`    | —     | Not yet implemented (scoping partially covers)   | 2026-03-26    |
@@ -40,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | A-    | 115 tests across 14 files, all critical domains covered | 2026-03-27 |
+| Test coverage     | A-    | 133 tests across 15 files, all critical domains covered | 2026-03-27 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process
