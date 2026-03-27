@@ -114,13 +114,18 @@ export function clusterSuggestions(results: RunResult[]): SuggestionCluster[] {
     clusters.push(...clusterByCategory(file, withoutLine));
   }
 
+  // Second pass: merge clusters on the same file with similar rationale text.
+  // This catches the case where multiple agents flag the same conceptual issue
+  // on different lines (e.g., LICENSE mismatch mentioned at lines 88, 302, 400).
+  const merged = mergeSimilarClusters(clusters);
+
   // Sort: agreement desc, then severity asc (critical first)
-  clusters.sort((a, b) => {
+  merged.sort((a, b) => {
     if (b.agreement !== a.agreement) return b.agreement - a.agreement;
     return (SEVERITY_RANK[a.severity] ?? 5) - (SEVERITY_RANK[b.severity] ?? 5);
   });
 
-  return clusters;
+  return merged;
 }
 
 function clusterByLine(file: string, items: AgentSuggestion[]): SuggestionCluster[] {
@@ -166,6 +171,73 @@ function clusterByCategory(file: string, items: AgentSuggestion[]): SuggestionCl
   }
 
   return Array.from(byCategory.values()).map((group) => buildCluster(file, group));
+}
+
+/**
+ * Merge clusters on the same file that have similar rationale text.
+ * Uses a normalized fingerprint of the rationale (first N significant words)
+ * to detect when multiple clusters describe the same conceptual issue.
+ */
+function mergeSimilarClusters(clusters: SuggestionCluster[]): SuggestionCluster[] {
+  // Group by file first
+  const byFile = new Map<string, SuggestionCluster[]>();
+  for (const c of clusters) {
+    const existing = byFile.get(c.file);
+    if (existing) {
+      existing.push(c);
+    } else {
+      byFile.set(c.file, [c]);
+    }
+  }
+
+  const result: SuggestionCluster[] = [];
+
+  for (const [, fileClusters] of byFile) {
+    // Group by fingerprint within the file
+    const byFingerprint = new Map<string, SuggestionCluster[]>();
+    for (const c of fileClusters) {
+      const fp = rationaleFingerprint(c);
+      const existing = byFingerprint.get(fp);
+      if (existing) {
+        existing.push(c);
+      } else {
+        byFingerprint.set(fp, [c]);
+      }
+    }
+
+    for (const [, group] of byFingerprint) {
+      if (group.length === 1) {
+        result.push(group[0]!);
+      } else {
+        // Merge all items from duplicate clusters into one
+        const allItems = group.flatMap((c) => c.items);
+        result.push(buildCluster(group[0]!.file, allItems));
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Extract a normalized fingerprint from a cluster's rationale.
+ * Strips common filler words and takes the first 8 significant words.
+ * Two clusters about the same issue will share a fingerprint even if
+ * the exact wording differs slightly across agents.
+ */
+function rationaleFingerprint(cluster: SuggestionCluster): string {
+  // Use the first rationale (highest-severity agent)
+  const text = cluster.rationales[0]?.rationale ?? "";
+
+  // Normalize: lowercase, strip punctuation, split into words
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 3) // skip short filler words
+    .slice(0, 8);
+
+  return `${cluster.file}:${cluster.category}:${words.join(" ")}`;
 }
 
 function buildCluster(file: string, items: AgentSuggestion[]): SuggestionCluster {

@@ -52,11 +52,11 @@ describe("clusterSuggestions", () => {
     expect(clusters[0]!.severity).toBe("high");
   });
 
-  it("keeps distant lines in separate clusters", () => {
+  it("keeps distant lines in separate clusters when rationales differ", () => {
     const results = [
       makeResult("claude", [
-        makeSuggestion({ file: "app.ts", line: 10 }),
-        makeSuggestion({ file: "app.ts", line: 100 }),
+        makeSuggestion({ file: "app.ts", line: 10, rationale: "SQL injection vulnerability in query builder" }),
+        makeSuggestion({ file: "app.ts", line: 100, rationale: "Missing authentication check on admin endpoint" }),
       ]),
     ];
 
@@ -75,10 +75,10 @@ describe("clusterSuggestions", () => {
     expect(clusters[0]!.agreement).toBe(2);
   });
 
-  it("does not cluster lines > 5 apart", () => {
+  it("does not cluster lines > 5 apart with different rationales", () => {
     const results = [
-      makeResult("agent-a", [makeSuggestion({ file: "f.ts", line: 10 })]),
-      makeResult("agent-b", [makeSuggestion({ file: "f.ts", line: 16 })]),
+      makeResult("agent-a", [makeSuggestion({ file: "f.ts", line: 10, rationale: "Buffer overflow in parsing function" })]),
+      makeResult("agent-b", [makeSuggestion({ file: "f.ts", line: 16, rationale: "Unvalidated user input passed to exec" })]),
     ];
 
     const clusters = clusterSuggestions(results);
@@ -157,6 +157,21 @@ describe("clusterSuggestions", () => {
     // Only one rationale per agent
     expect(clusters[0]!.rationales).toHaveLength(1);
     expect(clusters[0]!.agreement).toBe(1);
+  });
+
+  it("merges distant clusters with similar rationale on the same file", () => {
+    const rationale = "The LICENSE file says 'Do what you want' but the root LICENSE is PolyForm";
+    const results = [
+      makeResult("gemini", [makeSuggestion({ file: "README.md", line: 400, rationale })]),
+      makeResult("cursor", [makeSuggestion({ file: "README.md", line: 88, rationale })]),
+      makeResult("cursor", [makeSuggestion({ file: "README.md", line: 302, rationale })]),
+      makeResult("codex", [makeSuggestion({ file: "README.md", line: 353, rationale })]),
+    ];
+
+    const clusters = clusterSuggestions(results);
+    // Should merge into 1 cluster, not 4
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]!.agreement).toBe(3); // gemini, cursor, codex
   });
 
   it("computes median line", () => {
