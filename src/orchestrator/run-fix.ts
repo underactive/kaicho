@@ -10,6 +10,7 @@ import {
 import { AGENT_CONFIGS } from "../config/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 import { buildFixPrompt } from "../prompts/index.js";
+import { buildCommitMessage } from "./commit-message.js";
 import {
   ensureCleanWorkTree,
   createFixBranch,
@@ -166,11 +167,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
 
     // Commit the fix
     notify({ step: "commit", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"}` });
-    const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
-    await commitFix(
-      absRepoPath,
-      `fix: ${cluster.category} issue in ${location}\n\nApplied by kaicho fix via ${agentName}`,
-    );
+    await commitFix(absRepoPath, buildCommitMessage(cluster, agentName));
 
     await recordFix(absRepoPath, {
       clusterId: cluster.id,

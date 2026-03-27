@@ -10,6 +10,7 @@ import {
 import { AGENT_CONFIGS } from "../config/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 import { buildFixPrompt } from "../prompts/index.js";
+import { buildCommitMessage } from "./commit-message.js";
 import {
   ensureCleanWorkTree,
   createFixBranch,
@@ -119,7 +120,6 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i]!;
       const agentName = pickAgent(cluster, options.agent);
-      const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
       const fixStartMs = Date.now();
 
       notify({
@@ -161,7 +161,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       });
 
       const prompt = buildFixPrompt(cluster);
-      log("info", "Batch fix", { agent: agentName, cluster: location, index: i + 1, total: clusters.length });
+      log("info", "Batch fix", { agent: agentName, cluster: `${cluster.file}:${cluster.line}`, index: i + 1, total: clusters.length });
 
       const result = await adapter.run(absRepoPath, prompt, "fix");
 
@@ -201,10 +201,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       }
 
       // Commit this individual fix
-      await commitFix(
-        absRepoPath,
-        `fix(${cluster.id}): ${cluster.category} issue in ${location}\n\nApplied by kaicho fix via ${agentName}`,
-      );
+      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName));
 
       const item: BatchFixItemResult = {
         clusterId: cluster.id,
