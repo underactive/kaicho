@@ -30,6 +30,7 @@ export function formatMultiJson(multi: MultiScanResult): void {
       rationales: c.rationales,
       suggestedChange: c.suggestedChange,
       summary: c.summary ?? null,
+      fixed: c.fixed ?? false,
     })),
     results: multi.results.map(formatSingleResult),
     totalFindings: multi.clusters.length,

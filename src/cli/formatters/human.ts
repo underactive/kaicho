@@ -172,7 +172,8 @@ function formatCluster(
     : "";
 
   const idTag = color(cluster.id, "\x1b[90m");
-  out.write(`  ${idTag} ${severityLabel(cluster.severity)} ${cluster.category} — ${location}${agreementBadge}\n`);
+  const fixedTag = cluster.fixed ? color(" [fixed]", "\x1b[32m") : "";
+  out.write(`  ${idTag} ${severityLabel(cluster.severity)} ${cluster.category} — ${location}${agreementBadge}${fixedTag}\n`);
 
   if (cluster.summary) {
     out.write(`  ${color("    " + cluster.summary, "\x1b[37m")}\n`);

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
+import { getFixedClusterIds } from "../../fix-log/index.js";
 import { applyEnrichedCache } from "./enrich.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
 import { formatMultiJson } from "../formatters/json.js";
@@ -30,7 +31,8 @@ function formatClusterDetail(cluster: SuggestionCluster, asJson: boolean): void 
   if (cluster.summary) {
     out.write(`  ${cluster.summary}\n`);
   }
-  out.write(`  Agents: ${cluster.agents.join(", ")} (${cluster.agreement}x agreement)\n\n`);
+  const fixedLabel = cluster.fixed ? color(" [fixed]", "\x1b[32m") : "";
+  out.write(`  Agents: ${cluster.agents.join(", ")} (${cluster.agreement}x agreement)${fixedLabel}\n\n`);
 
   for (const r of cluster.rationales) {
     out.write(`  ${color(r.agent, "\x1b[1m")}:\n`);
@@ -124,6 +126,10 @@ export const reportCommand = new Command("report")
 
     let clusters = clusterSuggestions(results);
     await applyEnrichedCache(absRepoPath, clusters, opts.task as string | undefined);
+    const fixedIds = await getFixedClusterIds(absRepoPath);
+    for (const c of clusters) {
+      if (fixedIds.has(c.id)) c.fixed = true;
+    }
     if (opts.minSeverity) {
       clusters = filterBySeverity(clusters, opts.minSeverity as string);
     }

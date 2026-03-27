@@ -27,6 +27,8 @@ export interface SuggestionCluster {
   suggestedChange: string | null;
   /** One-line summary from local LLM (populated by enrich) */
   summary?: string;
+  /** Whether this finding has been fixed (populated from fix log) */
+  fixed?: boolean;
   /** All individual suggestions in this cluster */
   items: AgentSuggestion[];
 }
