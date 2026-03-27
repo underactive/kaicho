@@ -3,45 +3,56 @@
 ## System overview
 
 Kaicho orchestrates multiple AI coding agents (Claude, Codex, Gemini, Cursor)
-against target repositories and collects their output as structured suggestions.
+against target repositories, collects their output as structured suggestions,
+deduplicates across agents, and can dispatch agents to apply fixes.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      CLI / API                          │
-│  (user invokes a run against a repo)                    │
+│                      CLI                                │
+│  scan, fix, report, enrich, list, init                  │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
 │                   Orchestrator                          │
-│  Resolves agent config, prepares repo context,          │
-│  dispatches work to agent adapters                      │
+│  run-scan: parallel agents + scope + auto-enrich        │
+│  run-fix: single fix on isolated branch                 │
+│  run-batch-fix: iterate findings, one branch            │
 └──────────┬──────────────────────────────────┬───────────┘
            │                                  │
            ▼                                  ▼
 ┌─────────────────────┐          ┌─────────────────────┐
-│   Agent Adapters    │          │   Repo Context       │
-│  ┌───────────────┐  │          │  Provider            │
-│  │ Claude CLI    │  │          │  (clones, worktrees, │
-│  │ Codex CLI     │  │          │   file tree, diffs)  │
-│  │ Gemini CLI    │  │          └─────────────────────┘
-│  │ Cursor agent  │  │
-│  └───────────────┘  │
-└──────────┬──────────┘
-           │
+│   Agent Adapters    │          │   Scope Resolver     │
+│  ┌───────────────┐  │          │  (git ls-files,      │
+│  │ Claude CLI    │  │          │   glob filtering)    │
+│  │ Codex CLI     │  │          └─────────────────────┘
+│  │ Gemini CLI    │  │
+│  │ Cursor agent  │  │          ┌─────────────────────┐
+│  └───────────────┘  │          │   Branch Manager     │
+│  mode: scan | fix   │          │  (create, diff,      │
+└──────────┬──────────┘          │   commit, discard)   │
+           │                     └─────────────────────┘
            ▼
 ┌─────────────────────────────────────────────────────────┐
 │                  Output Parser                          │
-│  Normalizes raw agent output into structured            │
-│  Suggestion objects (file, line, category, rationale)   │
+│  parseFromFile (schema-enforced: Claude, Codex)         │
+│  parseFromText (freeform: Cursor, Gemini)               │
+│  parseFromJsonl (Codex JSONL fallback)                  │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                Suggestion Store                         │
-│  Persists, deduplicates, and indexes suggestions        │
-│  across runs and agents                                 │
-└─────────────────────────────────────────────────────────┘
+│              Dedup + Clustering                         │
+│  Line proximity → rationale fingerprint → Jaccard       │
+│  similarity. Short IDs, severity filter.                │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────┴──────────────────────────────────┐
+│  Suggestion Store       │  Summarizer       │  Fix Log  │
+│  .kaicho/runs/*.json    │  Ollama (local)   │  fixed.json│
+│  RunRecord per agent    │  enriched-*.json  │  self-prune│
+└─────────────────────────┴───────────────────┴───────────┘
 ```
 
 ## Domain layers
@@ -66,14 +77,23 @@ single **Providers** interface. Domains never import cross-cutting code directly
 
 ## Domains
 
-| Domain            | Purpose                                           | Status    |
-|-------------------|---------------------------------------------------|-----------|
-| `agent-adapters`  | Uniform interface to each AI agent CLI            | Planned   |
-| `repo-context`    | Clone, worktree, file-tree, diff extraction       | Planned   |
-| `output-parser`   | Raw agent stdout -> structured Suggestion objects | Planned   |
-| `suggestion-store`| Persist, dedupe, index suggestions across runs    | Planned   |
-| `orchestrator`    | Dispatch runs, manage lifecycle, retry/timeout    | Planned   |
-| `cli`             | User-facing CLI commands and flags                | Planned   |
+| Domain            | Purpose                                           | Status      |
+|-------------------|---------------------------------------------------|-------------|
+| `types`           | Suggestion, AgentAdapter, RunResult, AgentMode    | Implemented |
+| `config`          | Defaults, agent registry, kaicho.config.json      | Implemented |
+| `agent-adapters`  | Uniform interface to 4 AI agent CLIs              | Implemented |
+| `output-parser`   | Raw agent stdout → structured Suggestion objects  | Implemented |
+| `suggestion-store`| Persist RunRecords to .kaicho/runs/               | Implemented |
+| `dedup`           | Cluster, merge, filter suggestions across agents  | Implemented |
+| `scope`           | File list resolution via git ls-files + globs     | Implemented |
+| `orchestrator`    | Scan, fix, batch-fix dispatch + progress          | Implemented |
+| `branch`          | Git branch create/diff/commit/discard for fixes   | Implemented |
+| `fix-log`         | Track applied fixes, self-pruning                 | Implemented |
+| `summarizer`      | Ollama integration for LLM summaries              | Implemented |
+| `prompts`         | Task prompts (security, qa, docs) + fix prompt    | Implemented |
+| `logger`          | Structured JSON logging to stderr                 | Implemented |
+| `cli`             | 6 commands, 2 formatters, progress callbacks      | Implemented |
+| `repo-context`    | Clone, worktree, isolated scans                   | Not started |
 
 ## Key design decisions
 
@@ -86,12 +106,23 @@ single **Providers** interface. Domains never import cross-cutting code directly
    `severity`, `rationale`, `suggestedChange`. This is what makes cross-agent
    comparison possible.
 
-3. **Repo context is ephemeral.** Each run gets a worktree or shallow clone.
-   Agents operate on isolated copies. Cleanup is automatic.
+3. **AgentMode: scan vs fix.** Same adapter, different CLI flags. Scan uses
+   read-only modes; fix uses write-access modes. No code duplication.
 
 4. **Parse at the boundary.** Agent output is untrusted. The output parser
    validates and structures it. Interior code works only with typed,
    validated `Suggestion` objects.
 
-5. **Boring tech.** TypeScript, Node.js, SQLite for local persistence. No
-   exotic dependencies. Agents reason better about well-known tools.
+5. **Two-pass deduplication.** Line proximity clustering (±5 lines), then
+   Jaccard keyword similarity for same-file same-category clusters that
+   differ in wording but describe the same issue.
+
+6. **Fix on isolated branches.** Fixes never touch the user's working branch.
+   Each fix (or batch) creates `kaicho/fix-<hash>`, user merges manually.
+
+7. **Self-pruning fix log.** Tracks which findings are fixed. Auto-removes
+   entries when branches are deleted or after 30 days.
+
+8. **Boring tech.** TypeScript, Node.js, JSON file persistence. Three
+   production dependencies (zod, commander, execa). Agents reason better
+   about well-known tools.

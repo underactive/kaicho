@@ -1,12 +1,12 @@
 # Kaicho
 
-Run multiple AI coding agents against your repositories and collect structured, deduplicated suggestions.
+Run multiple AI coding agents against your repositories, collect structured suggestions, and apply fixes — all from one CLI.
 
-Kaicho orchestrates Claude, Codex, Cursor, and Gemini in parallel, normalizes their output into a unified format, and surfaces cross-agent agreement so you can focus on the findings that matter.
+Kaicho orchestrates Claude, Codex, Cursor, and Gemini in parallel, normalizes their output, deduplicates across agents, and lets you fix issues on isolated git branches.
 
 ## Why
 
-If you pay for multiple AI coding tools, most of them sit idle. Kaicho puts them all to work — run a security audit, QA review, or documentation check across all your agents at once and get a single, deduplicated report.
+If you pay for multiple AI coding tools, most of them sit idle. Kaicho puts them all to work — run a security audit, QA review, or documentation check across all your agents at once, get a single deduplicated report with LLM-generated summaries, and apply fixes without leaving the terminal.
 
 ## Install
 
@@ -23,6 +23,8 @@ Requires Node.js >= 20 and at least one of:
 - [Cursor Agent](https://cursor.com/cli) (`agent`)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`gemini`)
 
+Optional: [Ollama](https://ollama.ai) with `qwen3:1.7b` for local LLM summaries.
+
 Check what you have installed:
 
 ```bash
@@ -32,38 +34,52 @@ kaicho list
 ## Quick start
 
 ```bash
-# Security scan with all available agents
+# 1. Scan — run all agents in parallel
 kaicho scan --repo=~/my-project
 
-# Scoped scan (faster — agents only review matching files)
-kaicho scan --scope=src --files="*.ts" --repo=~/my-project
+# 2. Review — see deduplicated, summarized findings
+kaicho report --repo=~/my-project
 
-# QA review
-kaicho scan --task=qa --repo=~/my-project
+# 3. Fix — apply fixes on an isolated branch
+kaicho fix --repo=~/my-project
 
-# Documentation gaps
-kaicho scan --task=docs --repo=~/my-project
-
-# Single agent
-kaicho scan --agent=codex --repo=~/my-project
+# Or batch fix everything at once
+kaicho fix --batch --repo=~/my-project
 ```
 
 ## Commands
 
 ### `kaicho scan`
 
-Run agents against a repository.
+Run agents against a repository. All installed agents run in parallel.
 
 ```
 Options:
   --agent <agent>         Agent to use (omit for all available)
   --task <task>           Task: security, qa, docs (default: security)
   --repo <path>           Path to target repository (default: .)
-  --timeout <ms>          Agent timeout in milliseconds (default: 300000)
+  --timeout <ms>          Agent timeout in milliseconds (default: 600000)
   --scope <dirs>          Limit to directories (comma-separated)
   --files <patterns>      Limit to file patterns (comma-separated)
   --min-severity <level>  Filter: critical, high, medium, low, info
   --json                  JSON output (auto-enabled when piped)
+```
+
+### `kaicho fix`
+
+Apply fixes for scan findings using AI agents on isolated git branches.
+
+```
+Options:
+  --repo <path>           Path to target repository (default: .)
+  --agent <agent>         Agent to use (default: agent that found the issue)
+  --id <hash>             Fix a specific finding by short ID
+  --cluster <n>           Fix by cluster number
+  --task <task>           Filter findings by task type
+  --min-severity <level>  Minimum severity to fix
+  --batch                 Fix all findings on one branch (continue/skip/stop)
+  --auto                  Batch fix without confirmations
+  --timeout <ms>          Agent timeout in milliseconds (default: 600000)
 ```
 
 ### `kaicho report`
@@ -75,9 +91,22 @@ Options:
   --repo <path>           Path to target repository (default: .)
   --agent <agent>         Filter by agent
   --task <task>           Filter by task type
+  --id <hash>             Show full detail for a specific finding
   --last <n>              Show last N runs (default: latest per agent)
   --min-severity <level>  Filter by minimum severity
   --json                  JSON output
+```
+
+### `kaicho enrich`
+
+Generate LLM summaries for findings using a local Ollama model.
+
+```
+Options:
+  --repo <path>           Path to target repository (default: .)
+  --task <task>           Filter by task type
+  --model <model>         Ollama model (default: qwen3:1.7b)
+  --force                 Regenerate even if cache exists
 ```
 
 ### `kaicho list`
@@ -86,7 +115,7 @@ Show available agents and their install status.
 
 ### `kaicho init`
 
-Create a `kaicho.config.json` in the target repository with default settings.
+Create a `kaicho.config.json` in the target repository.
 
 ## Configuration
 
@@ -97,7 +126,7 @@ Create `kaicho.config.json` in your repo root (or run `kaicho init`):
   "task": "security",
   "scope": "src",
   "files": "*.ts,*.js",
-  "timeout": 300000,
+  "timeout": 600000,
   "minSeverity": "medium"
 }
 ```
@@ -106,44 +135,38 @@ CLI flags override config values.
 
 ## How it works
 
-1. **Invoke** — Kaicho spawns each agent CLI as a subprocess with structured output flags
-2. **Capture** — Agent output is extracted via JSON schema enforcement (Claude, Codex) or text parsing (Cursor, Gemini)
-3. **Validate** — Every suggestion is validated against a Zod schema at the boundary; malformed items are logged and dropped
-4. **Cluster** — Suggestions from multiple agents are grouped by file and line proximity (within 5 lines), surfacing cross-agent agreement
-5. **Store** — Results are saved to `.kaicho/runs/` as JSON for later review via `kaicho report`
+1. **Scan** — Spawns each agent CLI as a subprocess with structured output flags. Agents run in parallel.
+2. **Parse** — Agent output is extracted via JSON schema enforcement (Claude, Codex) or text parsing (Cursor, Gemini). Every suggestion is validated with Zod.
+3. **Cluster** — Suggestions are grouped by file + line proximity (±5 lines), then merged by rationale keyword similarity. Cross-agent agreement surfaces first.
+4. **Enrich** — If Ollama is running, each cluster gets a one-line LLM summary. Cached per-task.
+5. **Store** — Results saved to `.kaicho/runs/` as JSON. Enrichment cached in `.kaicho/enriched-*.json`.
+6. **Fix** — Agent dispatched with write-access flags on an isolated `kaicho/fix-*` branch. Each fix gets a descriptive commit with full rationale. Fix log tracks what's been fixed.
 
-## Output format
+## Output
 
-Findings are sorted by agreement count (multi-agent consensus first), then severity:
+Findings are sorted by agreement (multi-agent consensus first), then severity:
 
 ```
   [claude] 12 suggestions (147.2s)
   [codex] 6 suggestions (103.8s)
   [cursor] 5 suggestions (89.4s)
-  [gemini] 5 suggestions (112.7s)
 
-  [high] security — src/api.ts:42 3x
+  ecb5a3 [high] security — src/api.ts:42 3x
+      SQL injection via unsanitized user input in query builder
   agents: claude, codex, cursor
     claude: User input concatenated into SQL query...
     codex: SQL injection via string interpolation...
     cursor: Unsanitized input in database query...
+    > Use parameterized queries instead of string concatenation
 
-  20 findings (5 confirmed by multiple agents) from 4 agents (147.2s)
+  20 findings (5 confirmed by multiple agents) from 3 agents (147.2s)
 ```
+
+Fixed findings show `[fixed]` in reports. Already-fixed findings are skipped by `kaicho fix`.
 
 ## Architecture
 
-```
-CLI → Orchestrator → Agent Adapters (Claude, Codex, Cursor, Gemini)
-                         ↓
-                   Output Parser (Zod validation)
-                         ↓
-                   Suggestion Store (.kaicho/runs/)
-                         ↓
-                   Dedup Engine (clustering)
-                         ↓
-                   Formatters (human / JSON)
-```
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full domain diagram and design decisions.
 
 Built with TypeScript (strict mode), Zod, Commander, and Execa. Three production dependencies.
 

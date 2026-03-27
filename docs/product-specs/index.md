@@ -10,8 +10,10 @@ code is structured.
 2. Kaicho invokes one or more AI agents against that repo
 3. Each agent's raw output is captured and parsed
 4. Output is normalized into structured `Suggestion` objects
-5. Suggestions are deduplicated, categorized, and stored
-6. User reviews aggregated suggestions across agents
+5. Suggestions are deduplicated, clustered, and enriched with LLM summaries
+6. User reviews aggregated findings across agents (report)
+7. User dispatches an agent to apply fixes on isolated branches (fix)
+8. User reviews diffs and merges when satisfied
 
 ## Specs
 
@@ -22,6 +24,7 @@ code is structured.
 | [list](list.md) | Implemented | Show installed agents and versions |
 | [config](config.md) | Implemented | Per-repo config file + kaicho init |
 | [fix](fix.md) | Implemented (Phase A+B) | Single + batch fix with fix log tracking |
+| enrich | Implemented | Ollama LLM summaries for findings (auto or manual) |
 
 ## Writing specs
 
