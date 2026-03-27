@@ -27,13 +27,17 @@ writing the code myself.
 - Working tree is dirty → error suggesting commit/stash
 - Agent that found the issue is not installed → fall back to next available, or error with `--agent` override hint
 
-## Batch mode (Phase B)
+## Batch mode (Phase D — parallel worktrees)
 
-- `--batch` iterates all findings on one branch with continue/skip/stop
-- `--auto` skips confirmations (applies all fixes without prompting)
-- Each fix gets its own commit (individually revertable)
-- Summary at the end: N applied, N skipped, N failed
-- One branch to merge: `kaicho/fix-<hash>`
+- `--batch` runs fixes in parallel using git worktrees (up to 3 concurrent)
+- Each fix gets its own branch: `kaicho/fix-<hash>`
+- After all parallel fixes complete, user confirms each individually: keep/discard/retry
+- `--auto` keeps all applied fixes without prompting
+- Worktrees are temporary (created in system tmpdir, cleaned up after)
+- Main worktree stays on user's current branch throughout
+- Summary shows kept and discarded branches
+- Warns if two kept branches modify the same file (potential merge conflict)
+- User merges individually: `git merge kaicho/fix-<hash>`
 
 ## Validation (Phase C)
 
