@@ -15,6 +15,14 @@ import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/ind
 import { summarizeClusters } from "../summarizer/index.js";
 import { log } from "../logger/index.js";
 
+export interface ScanProgress {
+  agent: string;
+  status: "started" | "done" | "skipped";
+  durationMs?: number;
+  suggestions?: number;
+  error?: string;
+}
+
 export interface ScanOptions {
   agent?: string;
   task: string;
@@ -22,6 +30,7 @@ export interface ScanOptions {
   timeoutMs?: number;
   scope?: string;
   files?: string;
+  onProgress?: (progress: ScanProgress) => void;
 }
 
 export interface MultiScanResult {
@@ -65,12 +74,14 @@ async function runSingleAgent(
   prompt: string,
   absRepoPath: string,
   timeoutMs?: number,
+  onProgress?: (progress: ScanProgress) => void,
 ): Promise<RunResult> {
   const adapter = resolveAdapter(agent, timeoutMs);
 
   const available = await adapter.isAvailable();
   if (!available) {
     log("warn", "Agent not available, skipping", { agent });
+    onProgress?.({ agent, status: "skipped" });
     return {
       agent,
       status: "skipped",
@@ -84,7 +95,19 @@ async function runSingleAgent(
   }
 
   log("info", "Running scan", { agent, repoPath: absRepoPath });
-  return adapter.run(absRepoPath, prompt);
+  onProgress?.({ agent, status: "started" });
+
+  const result = await adapter.run(absRepoPath, prompt);
+
+  onProgress?.({
+    agent,
+    status: "done",
+    durationMs: result.durationMs,
+    suggestions: result.suggestions.length,
+    error: result.status !== "success" ? (result.error ?? result.status) : undefined,
+  });
+
+  return result;
 }
 
 /**
@@ -138,7 +161,7 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
 
   // Run all agents in parallel
   const settled = await Promise.allSettled(
-    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs)),
+    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs, options.onProgress)),
   );
 
   const results: RunResult[] = settled.map((s, i) => {

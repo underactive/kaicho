@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
-import { runScan } from "../../orchestrator/index.js";
+import { runScan, type ScanProgress } from "../../orchestrator/index.js";
 import { loadConfig, mergeWithConfig } from "../../config/index.js";
 import { filterBySeverity } from "../../dedup/index.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
@@ -37,6 +37,27 @@ export const scanCommand = new Command("scan")
       minSeverity: opts.minSeverity as string | undefined,
     }, config);
 
+    const isTTY = process.stderr.isTTY;
+
+    const onProgress = (p: ScanProgress): void => {
+      if (isTTY) {
+        if (p.status === "started") {
+          process.stderr.write(`  [${p.agent}] scanning...\n`);
+        } else if (p.status === "done") {
+          const dur = p.durationMs ? `${(p.durationMs / 1000).toFixed(1)}s` : "";
+          if (p.error) {
+            process.stderr.write(`  [${p.agent}] ${p.error} ${dur}\n`);
+          } else {
+            process.stderr.write(`  [${p.agent}] ${p.suggestions ?? 0} suggestions ${dur}\n`);
+          }
+        } else if (p.status === "skipped") {
+          process.stderr.write(`  [${p.agent}] skipped — not installed\n`);
+        }
+      } else {
+        process.stderr.write(JSON.stringify({ type: "scan.progress", ...p }) + "\n");
+      }
+    };
+
     const multiResult = await runScan({
       agent: merged.agent,
       task: merged.task ?? "security",
@@ -44,6 +65,7 @@ export const scanCommand = new Command("scan")
       timeoutMs: merged.timeout ? parseInt(String(merged.timeout), 10) : 300_000,
       scope: merged.scope,
       files: merged.files,
+      onProgress,
     });
 
     if (merged.minSeverity) {
