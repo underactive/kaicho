@@ -67,8 +67,23 @@ export const enrichCommand = new Command("enrich")
 
       process.stdout.write(`  [${task}] Summarizing ${needsSummary} finding${needsSummary === 1 ? "" : "s"} with ${opts.model as string}...\n`);
 
+      const isTTY = process.stderr.isTTY;
       const count = await summarizeClusters(clusters, {
         model: opts.model as string,
+        onProgress: (p) => {
+          if (isTTY) {
+            // Overwrite line in-place for TTY
+            process.stderr.write(`\r  [${task}] ${p.current}/${p.total} ${p.file} (${p.status})${"".padEnd(20)}`);
+            if (p.current === p.total) process.stderr.write("\n");
+          } else {
+            // JSONL for piping / thin clients
+            process.stderr.write(JSON.stringify({
+              type: "enrich.progress",
+              task,
+              ...p,
+            }) + "\n");
+          }
+        },
       });
 
       if (count === 0) {

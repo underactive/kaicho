@@ -4,9 +4,18 @@ import type { SuggestionCluster } from "../dedup/index.js";
 const DEFAULT_MODEL = "qwen3:1.7b";
 const DEFAULT_URL = "http://localhost:11434";
 
+export interface SummarizerProgress {
+  current: number;
+  total: number;
+  clusterId: string;
+  file: string;
+  status: "started" | "done" | "skipped" | "failed";
+}
+
 export interface SummarizerOptions {
   model?: string;
   ollamaUrl?: string;
+  onProgress?: (progress: SummarizerProgress) => void;
 }
 
 /**
@@ -88,17 +97,43 @@ export async function summarizeClusters(
     return 0;
   }
 
+  const pending = clusters.filter((c) => !c.summary);
+  const total = pending.length;
   let count = 0;
-  for (const cluster of clusters) {
-    if (cluster.summary) continue;
+
+  for (let i = 0; i < pending.length; i++) {
+    const cluster = pending[i]!;
+
+    options.onProgress?.({
+      current: i + 1,
+      total,
+      clusterId: cluster.id,
+      file: cluster.file,
+      status: "started",
+    });
 
     const summary = await summarizeOne(cluster, options);
     if (summary) {
       cluster.summary = summary;
       count++;
+      options.onProgress?.({
+        current: i + 1,
+        total,
+        clusterId: cluster.id,
+        file: cluster.file,
+        status: "done",
+      });
+    } else {
+      options.onProgress?.({
+        current: i + 1,
+        total,
+        clusterId: cluster.id,
+        file: cluster.file,
+        status: "failed",
+      });
     }
   }
 
-  log("info", "Generated summaries", { count, total: clusters.length });
+  log("info", "Generated summaries", { count, total });
   return count;
 }
