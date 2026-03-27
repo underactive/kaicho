@@ -5,6 +5,10 @@
   "description": "A group of related suggestions from one or more agents, clustered by file and line proximity (±5 lines). Multi-agent agreement surfaces as higher 'agreement' counts.",
   "type": "object",
   "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable 6-char hex ID derived from file + line bucket + category"
+    },
     "file": {
       "type": "string",
       "description": "The canonical file for this cluster"
@@ -48,7 +52,11 @@
     "suggestedChange": {
       "type": ["string", "null"],
       "description": "Best suggested change (from the highest-severity suggestion)"
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "One-line summary from local LLM (populated by kaicho enrich)"
     }
   },
-  "required": ["file", "line", "category", "severity", "agents", "agreement", "rationales", "suggestedChange"]
+  "required": ["id", "file", "line", "category", "severity", "agents", "agreement", "rationales", "suggestedChange"]
 }

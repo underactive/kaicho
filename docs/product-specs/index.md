@@ -21,7 +21,7 @@ code is structured.
 | [report](report.md) | Implemented | View and filter past scan results |
 | [list](list.md) | Implemented | Show installed agents and versions |
 | [config](config.md) | Implemented | Per-repo config file + kaicho init |
-| [fix](fix.md) | Implemented (Phase A) | Apply scan findings via agents on isolated branches |
+| [fix](fix.md) | Implemented (Phase A+B) | Single + batch fix with fix log tracking |
 
 ## Writing specs
 

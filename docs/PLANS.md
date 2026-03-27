@@ -8,7 +8,7 @@ description or a task tool).
 
 | Plan | Goal | Owner | Started |
 |------|------|-------|---------|
-| [fix-command](exec-plans/active/fix-command.md) | Apply scan suggestions via agents on isolated branches | — | 2026-03-26 |
+| (none) | — | — | — |
 
 See [exec-plans/active/](exec-plans/active/) for full plan documents.
 
@@ -17,6 +17,7 @@ See [exec-plans/active/](exec-plans/active/) for full plan documents.
 | Plan | Goal | Completed |
 |------|------|-----------|
 | [Phase 0](exec-plans/completed/phase-0-core-loop.md) | Core loop + multi-agent orchestration | 2026-03-26 |
+| [fix-command](exec-plans/completed/fix-command.md) | Apply scan suggestions via agents (Phase A + B) | 2026-03-26 |
 
 See [exec-plans/completed/](exec-plans/completed/) for full plan documents.
 

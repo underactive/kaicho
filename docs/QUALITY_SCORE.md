@@ -23,12 +23,15 @@ cleanup and investment.
 | `suggestion-store`| A     | Symlink/traversal protection, 6 tests           | 2026-03-26    |
 | `dedup`           | A     | Proximity clustering, severity filter, 12 tests | 2026-03-26    |
 | `scope`           | A     | git ls-files + fallback, glob matching, 9 tests | 2026-03-26    |
-| `orchestrator`    | B     | Parallel dispatch works, no unit tests           | 2026-03-26    |
-| `cli`             | B     | 4 commands, 2 formatters, no unit tests          | 2026-03-26    |
+| `orchestrator`    | B+    | Scan + fix + batch-fix, progress callbacks, no unit tests | 2026-03-26 |
+| `cli`             | B+    | 6 commands, 2 formatters, progress, no unit tests | 2026-03-26   |
 | `config`          | B+    | Config load + merge works, no tests (simple)     | 2026-03-26    |
-| `prompts`         | B+    | 3 task types, shared schema, no tests (templates)| 2026-03-26    |
+| `prompts`         | A-    | 3 scan tasks + fix prompt, 6 tests               | 2026-03-26    |
 | `logger`          | B+    | Minimal structured logger, no tests (trivial)    | 2026-03-26    |
-| `types`           | A     | Zod schemas, clean interfaces                    | 2026-03-26    |
+| `types`           | A     | Zod schemas, AgentMode, clean interfaces         | 2026-03-26    |
+| `branch`          | B+    | Create/diff/commit/discard, 3 tests              | 2026-03-26    |
+| `fix-log`         | B+    | Self-pruning fix tracker, no tests               | 2026-03-26    |
+| `summarizer`      | B+    | Ollama integration, graceful fallback, no tests  | 2026-03-26    |
 | `repo-context`    | —     | Not yet implemented (scoping partially covers)   | 2026-03-26    |
 
 ## Cross-cutting grades
@@ -37,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | B+    | 66 tests, critical domains covered, orchestrator/CLI gaps | 2026-03-26 |
+| Test coverage     | B+    | 76 tests across 10 files, critical domains covered, orchestrator/CLI gaps | 2026-03-26 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process
