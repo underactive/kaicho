@@ -30,6 +30,7 @@ export const fixCommand = new Command("fix")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
   .option("--min-severity <level>", "Minimum severity to show")
   .option("--validate", "Run a second agent to review each fix before keeping")
+  .option("--reviewer <agent>", "Agent to use for validation (default: auto-pick)")
   .option("--batch", "Fix all findings on one branch (continue/skip/stop after each)")
   .option("--auto", "Batch fix without confirmations")
   .action(async (opts) => {
@@ -155,6 +156,7 @@ export const fixCommand = new Command("fix")
     if (opts.validate && result.diff) {
       const config = await loadConfig(repoPath);
       process.stdout.write(`  ${color("Validating...", "\x1b[90m")}\n`);
+      const reviewerOverride = (opts.reviewer as string | undefined) ?? config.reviewer;
       const validation = await runValidation({
         repoPath: rawRepo,
         cluster,
@@ -162,6 +164,7 @@ export const fixCommand = new Command("fix")
         fixAgent: agentName,
         timeoutMs: parseInt(opts.timeout as string, 10),
         models: config.models,
+        reviewer: reviewerOverride,
       });
 
       if (validation.verdict === "approve") {
@@ -362,6 +365,7 @@ async function handleBatchFix(
         // Validate if requested
         if (doValidate && item.diff && item.status === "applied") {
           out.write(`  ${color("Validating...", "\x1b[90m")}\n`);
+          const reviewerOverride = (opts["reviewer"] as string | undefined) ?? config?.reviewer;
           const validation = await runValidation({
             repoPath: rawRepo,
             cluster,
@@ -369,6 +373,7 @@ async function handleBatchFix(
             fixAgent: item.agent,
             timeoutMs: parseInt((opts["timeout"] as string) ?? "300000", 10),
             models: config?.models,
+            reviewer: reviewerOverride,
           });
 
           if (validation.verdict === "approve") {

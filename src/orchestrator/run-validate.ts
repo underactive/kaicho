@@ -20,6 +20,7 @@ export interface ValidateOptions {
   fixAgent: string;
   timeoutMs?: number;
   models?: Record<string, string>;
+  reviewer?: string;
 }
 
 export interface ValidateResult {
@@ -59,8 +60,8 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
   const absRepoPath = path.resolve(expanded);
   const startMs = Date.now();
 
-  // Pick a different agent as reviewer
-  const reviewerName = pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES);
+  // Pick reviewer: explicit override > auto-pick
+  const reviewerName = options.reviewer ?? pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES);
   if (!reviewerName) {
     return {
       reviewer: "none",
