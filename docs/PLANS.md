@@ -8,7 +8,7 @@ description or a task tool).
 
 | Plan | Goal | Owner | Started |
 |------|------|-------|---------|
-| [fix-phase-c](exec-plans/active/fix-phase-c.md) | Validation + conflict detection for fixes | — | 2026-03-27 |
+| (none) | — | — | — |
 
 See [exec-plans/active/](exec-plans/active/) for full plan documents.
 
@@ -18,6 +18,7 @@ See [exec-plans/active/](exec-plans/active/) for full plan documents.
 |------|------|-----------|
 | [Phase 0](exec-plans/completed/phase-0-core-loop.md) | Core loop + multi-agent orchestration | 2026-03-26 |
 | [fix-command](exec-plans/completed/fix-command.md) | Apply scan suggestions via agents (Phase A + B) | 2026-03-26 |
+| [fix-phase-c](exec-plans/completed/fix-phase-c.md) | Validation + conflict detection (Phase C) | 2026-03-27 |
 
 See [exec-plans/completed/](exec-plans/completed/) for full plan documents.
 
