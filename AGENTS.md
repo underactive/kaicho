@@ -56,7 +56,11 @@ suggestions. Everything in this repo serves that loop.
    [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md). Add new domains to the
    table. Downgrade if you introduced debt; upgrade if you added tests or
    hardened the module.
-8. If you discover tech debt, log it in
+8. If you add, rename, or change the shape of a data contract (Suggestion,
+   RunRecord, SuggestionCluster, KaichoConfig), update the corresponding
+   JSON Schema in [docs/generated/](docs/generated/) and its
+   [README](docs/generated/README.md).
+9. If you discover tech debt, log it in
    [docs/exec-plans/tech-debt-tracker.md](docs/exec-plans/tech-debt-tracker.md).
 
 ## What NOT to do
