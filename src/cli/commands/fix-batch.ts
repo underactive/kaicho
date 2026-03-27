@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
-import { runParallelFix, runValidation, type ParallelFixItemResult, type ParallelFixConfirmResult } from "../../orchestrator/index.js";
+import { runParallelFix, type ParallelFixItemResult, type ParallelFixConfirmResult } from "../../orchestrator/index.js";
 import { loadConfig } from "../../config/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 
@@ -24,7 +24,7 @@ export async function handleParallelBatchFix(
   const repoPath = rawRepo.startsWith("~")
     ? path.join(os.homedir(), rawRepo.slice(1))
     : path.resolve(rawRepo);
-  const config = doValidate ? await loadConfig(repoPath) : undefined;
+  const config = await loadConfig(repoPath);
 
   out.write(`\n  Parallel fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"} (up to 3 concurrent)${isAuto ? " (auto)" : ""}${doValidate ? " + validation" : ""}...\n\n`);
 
@@ -37,6 +37,9 @@ export async function handleParallelBatchFix(
       concurrency: 3,
       auto: isAuto,
       verbose: opts["verbose"] === true,
+      models: config.models,
+      validate: doValidate,
+      reviewer: (opts["reviewer"] as string | undefined) ?? config.reviewer,
       onProgress: (p) => {
         if (isTTY) {
           if (p.step === "creating-worktree") {
@@ -54,7 +57,7 @@ export async function handleParallelBatchFix(
         }
       },
       onConfirm: isAuto ? undefined : async (item, cluster, current, total) => {
-        return confirmFix(item, cluster, current, total, rawRepo, opts, config);
+        return confirmFix(item, cluster, current, total);
       },
     });
 
@@ -99,12 +102,8 @@ async function confirmFix(
   cluster: SuggestionCluster,
   current: number,
   total: number,
-  rawRepo: string,
-  opts: Record<string, unknown>,
-  config: Awaited<ReturnType<typeof loadConfig>> | undefined,
 ): Promise<ParallelFixConfirmResult> {
   const out = process.stdout;
-  const doValidate = opts["validate"] === true;
 
   out.write(`\n  ${color(`--- Fix ${current}/${total}:`, "\x1b[1m")} ${item.clusterId} ${item.file} (${color(item.agent, "\x1b[1m")} → ${color(item.branch, "\x1b[36m")})\n`);
 
@@ -112,32 +111,21 @@ async function confirmFix(
     out.write(`\n${item.diff}\n`);
   }
 
-  // Validate if requested
-  if (doValidate && item.diff && item.status === "applied") {
-    out.write(`  ${color("Validating...", "\x1b[90m")}\n`);
-    const reviewerOverride = (opts["reviewer"] as string | undefined) ?? config?.reviewer;
-    const validation = await runValidation({
-      repoPath: rawRepo,
-      cluster,
-      diff: item.diff,
-      fixAgent: item.agent,
-      timeoutMs: parseInt((opts["timeout"] as string) ?? "1800000", 10),
-      models: config?.models,
-      reviewer: reviewerOverride,
-      verbose: opts["verbose"] === true,
-      fixerContext: item.fixerContext,
-    });
-
-    if (validation.verdict === "approve") {
-      out.write(`  ${color("Approved", "\x1b[32m")} by ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
-    } else if (validation.verdict === "concern") {
-      out.write(`  ${color("Concern", "\x1b[33m")} from ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
+  // Show pre-computed validation result (ran in parallel with other fixes)
+  if (item.validation) {
+    const v = item.validation;
+    if (v.verdict === "approve") {
+      out.write(`  ${color("Approved", "\x1b[32m")} by ${color(v.reviewer, "\x1b[1m")}: ${v.rationale}\n\n`);
+    } else if (v.verdict === "concern") {
+      out.write(`  ${color("Concern", "\x1b[33m")} from ${color(v.reviewer, "\x1b[1m")}: ${v.rationale}\n\n`);
       const retryCtx = !item.retryOf
-        ? { reviewer: validation.reviewer, concern: validation.rationale }
+        ? { reviewer: v.reviewer, concern: v.rationale }
         : undefined;
       return promptFixAction(item.branch, retryCtx);
+    } else if (v.verdict === "skipped") {
+      out.write(`  ${color("Validation skipped:", "\x1b[90m")} ${v.rationale}\n\n`);
     } else {
-      out.write(`  ${color("Validation:", "\x1b[90m")} ${validation.rationale}\n\n`);
+      out.write(`  ${color("Validation error:", "\x1b[31m")} ${v.rationale}\n\n`);
     }
   }
 

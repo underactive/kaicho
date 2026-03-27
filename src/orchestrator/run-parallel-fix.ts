@@ -15,6 +15,7 @@ import {
   pruneStaleWorktrees,
   cleanupWorktreeBase,
 } from "../branch/index.js";
+import { runValidation, type ValidateResult } from "./run-validate.js";
 import { recordFix } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
 
@@ -31,6 +32,7 @@ export interface ParallelFixItemResult {
   error?: string;
   retryOf?: string;
   fixerContext?: string;
+  validation?: ValidateResult;
 }
 
 export interface ParallelFixResult {
@@ -76,6 +78,8 @@ export interface ParallelFixOptions {
   concurrency?: number;
   auto?: boolean;
   verbose?: boolean;
+  validate?: boolean;
+  reviewer?: string;
   onProgress?: (progress: ParallelFixProgress) => void;
   onConfirm?: (
     item: ParallelFixItemResult,
@@ -153,9 +157,27 @@ async function executeFixInWorktree(
     await commitFix(worktreePath, buildCommitMessage(cluster, agentName));
     n("applied", { agent: agentName, branch, filesChanged });
 
+    const fixerContext = extractFixerContext(result.rawOutput) ?? undefined;
+
+    // Run validation in parallel with other fixes (reviewer reads from worktree)
+    let validation: ValidateResult | undefined;
+    if (options.validate) {
+      const valResult = await runValidation({
+        repoPath: worktreePath,
+        cluster,
+        diff,
+        fixAgent: agentName,
+        timeoutMs: options.timeoutMs,
+        models: options.models,
+        reviewer: options.reviewer,
+        verbose: options.verbose,
+        fixerContext,
+      });
+      validation = valResult;
+    }
+
     return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, {
-      status: "applied", filesChanged, diff,
-      fixerContext: extractFixerContext(result.rawOutput) ?? undefined,
+      status: "applied", filesChanged, diff, fixerContext, validation,
     });
   } catch (err) {
     await removeFixWorktree(absRepoPath, worktreePath, branch, true).catch(() => {});
@@ -215,15 +237,20 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
       totalApplied++;
 
       if (options.auto) {
-        // Auto mode: keep all applied fixes
-        await recordFix(absRepoPath, {
-          clusterId: item.clusterId, file: item.file,
-          agent: item.agent, branch: item.branch,
-          fixedAt: new Date().toISOString(),
-        });
-        await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, false);
-        keptBranches.push(item.branch);
-        totalKept++;
+        // Auto mode: keep approved, discard concerns
+        if (item.validation?.verdict === "concern") {
+          await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
+          totalDiscarded++;
+        } else {
+          await recordFix(absRepoPath, {
+            clusterId: item.clusterId, file: item.file,
+            agent: item.agent, branch: item.branch,
+            fixedAt: new Date().toISOString(),
+          });
+          await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, false);
+          keptBranches.push(item.branch);
+          totalKept++;
+        }
       } else if (options.onConfirm) {
         const action = await options.onConfirm(item, clusters[orderMap.get(item.clusterId)!]!, i + 1, results.length);
 
