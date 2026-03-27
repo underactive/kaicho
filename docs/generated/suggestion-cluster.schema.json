@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "suggestion-cluster",
+  "title": "SuggestionCluster",
+  "description": "A group of related suggestions from one or more agents, clustered by file and line proximity (±5 lines). Multi-agent agreement surfaces as higher 'agreement' counts.",
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "The canonical file for this cluster"
+    },
+    "line": {
+      "type": ["integer", "null"],
+      "description": "Representative line number (median of clustered lines, or null)"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["security", "bug", "performance", "maintainability", "style", "documentation"],
+      "description": "Category from the highest-severity suggestion in the cluster"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "info"],
+      "description": "Highest severity in the cluster"
+    },
+    "agents": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Which agents contributed to this cluster"
+    },
+    "agreement": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of distinct agents that found this issue"
+    },
+    "rationales": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "agent": { "type": "string" },
+          "rationale": { "type": "string" }
+        },
+        "required": ["agent", "rationale"]
+      },
+      "description": "One rationale per contributing agent"
+    },
+    "suggestedChange": {
+      "type": ["string", "null"],
+      "description": "Best suggested change (from the highest-severity suggestion)"
+    }
+  },
+  "required": ["file", "line", "category", "severity", "agents", "agreement", "rationales", "suggestedChange"]
+}

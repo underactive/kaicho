@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-record",
+  "title": "RunRecord",
+  "description": "A persisted scan result stored in .kaicho/runs/. This is the handoff format between the scan phase and any downstream consumer (report, fix, CI).",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this run"
+    },
+    "agent": {
+      "type": "string",
+      "description": "Agent that produced this result (claude, codex, cursor, gemini)"
+    },
+    "task": {
+      "type": "string",
+      "description": "Task type that was run (security, qa, docs)"
+    },
+    "repoPath": {
+      "type": "string",
+      "description": "Absolute path to the target repository"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the run started"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total run duration in milliseconds"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "timeout", "parse-error", "agent-error", "skipped"],
+      "description": "Outcome of the run"
+    },
+    "suggestions": {
+      "type": "array",
+      "items": { "$ref": "suggestion.schema.json" },
+      "description": "Validated suggestions from this agent"
+    },
+    "suggestionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of suggestions (convenience field)"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error message if status is not 'success'"
+    }
+  },
+  "required": ["runId", "agent", "task", "repoPath", "startedAt", "durationMs", "status", "suggestions", "suggestionCount"],
+  "additionalProperties": false
+}

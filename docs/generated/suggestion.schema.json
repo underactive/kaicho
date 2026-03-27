@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "suggestion",
+  "title": "Suggestion",
+  "description": "A single finding from an AI agent scan. This is the core data type in Kaicho — all agent output is normalized into this shape.",
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative file path from the repository root"
+    },
+    "line": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Line number of the finding, or null for file-level suggestions"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["security", "bug", "performance", "maintainability", "style", "documentation"],
+      "description": "Classification of the finding"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "info"],
+      "description": "Impact severity (critical > high > medium > low > info)"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Explanation of the issue and its impact"
+    },
+    "suggestedChange": {
+      "type": ["string", "null"],
+      "description": "Concrete fix or mitigation, or null if no specific fix is suggested"
+    }
+  },
+  "required": ["file", "line", "category", "severity", "rationale", "suggestedChange"],
+  "additionalProperties": false
+}
