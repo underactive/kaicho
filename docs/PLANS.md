@@ -8,7 +8,7 @@ description or a task tool).
 
 | Plan | Goal | Owner | Started |
 |------|------|-------|---------|
-| (none) | — | — | — |
+| [fix-phase-c](exec-plans/active/fix-phase-c.md) | Validation + conflict detection for fixes | — | 2026-03-27 |
 
 See [exec-plans/active/](exec-plans/active/) for full plan documents.
 
