@@ -1,5 +1,6 @@
 import { execa } from "execa";
 import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
+import { DEFAULT_TIMEOUT_MS } from "../config/index.js";
 import { parseFromFile } from "../output-parser/index.js";
 import { SUGGESTIONS_JSON_SCHEMA } from "../prompts/index.js";
 import { log } from "../logger/index.js";
@@ -11,7 +12,7 @@ export class ClaudeAdapter implements AgentAdapter {
     this.config = {
       name: "claude",
       command: "claude",
-      timeoutMs: 300_000,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
       ...config,
     };
   }
@@ -51,11 +52,17 @@ export class ClaudeAdapter implements AgentAdapter {
 
       log("info", "Starting Claude agent", { repoPath });
 
-      const result = await execa(this.config.command, args, {
+      const subprocess = execa(this.config.command, args, {
         cwd: repoPath,
         timeout: this.config.timeoutMs,
         reject: false,
       });
+
+      if (this.config.verbose && subprocess.stderr) {
+        subprocess.stderr.pipe(process.stderr, { end: false });
+      }
+
+      const result = await subprocess;
 
       const durationMs = Date.now() - startMs;
 

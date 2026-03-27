@@ -4,6 +4,7 @@ export {
   createFixBranch,
   captureDiff,
   commitFix,
+  resetLastCommit,
   discardFixBranch,
   keepFixBranch,
   type BranchResult,

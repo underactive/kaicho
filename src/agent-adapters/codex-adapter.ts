@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execa } from "execa";
 import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
+import { DEFAULT_TIMEOUT_MS } from "../config/index.js";
 import { parseFromFile, parseFromJsonl } from "../output-parser/index.js";
 import { SUGGESTIONS_JSON_SCHEMA } from "../prompts/index.js";
 import { log } from "../logger/index.js";
@@ -23,7 +24,7 @@ export class CodexAdapter implements AgentAdapter {
     this.config = {
       name: "codex",
       command: "codex",
-      timeoutMs: 300_000,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
       ...config,
     };
   }
@@ -61,6 +62,7 @@ export class CodexAdapter implements AgentAdapter {
           "utf-8",
         );
         args.push(
+          "--full-auto",
           "-s", "read-only",
           "--json",
           "-C", absRepoPath,
@@ -69,6 +71,7 @@ export class CodexAdapter implements AgentAdapter {
         );
       } else if (mode === "review") {
         args.push(
+          "--full-auto",
           "-s", "read-only",
           "--json",
           "-C", absRepoPath,
@@ -90,10 +93,16 @@ export class CodexAdapter implements AgentAdapter {
 
       log("info", "Starting Codex agent", { repoPath: absRepoPath });
 
-      const result = await execa(this.config.command, args, {
+      const subprocess = execa(this.config.command, args, {
         timeout: this.config.timeoutMs,
         reject: false,
       });
+
+      if (this.config.verbose && subprocess.stderr) {
+        subprocess.stderr.pipe(process.stderr, { end: false });
+      }
+
+      const result = await subprocess;
 
       const durationMs = Date.now() - startMs;
 

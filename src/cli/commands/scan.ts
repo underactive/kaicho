@@ -2,7 +2,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
 import { runScan, type ScanProgress } from "../../orchestrator/index.js";
-import { loadConfig, mergeWithConfig } from "../../config/index.js";
+import { loadConfig, mergeWithConfig, DEFAULT_TIMEOUT_MS } from "../../config/index.js";
 import { filterBySeverity } from "../../dedup/index.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
 import { formatMultiJson } from "../formatters/json.js";
@@ -66,7 +66,7 @@ export const scanCommand = new Command("scan")
       exclude: excludeList,
       task: merged.task ?? "security",
       repoPath: rawRepo,
-      timeoutMs: merged.timeout ? parseInt(String(merged.timeout), 10) : 300_000,
+      timeoutMs: merged.timeout ? parseInt(String(merged.timeout), 10) : DEFAULT_TIMEOUT_MS,
       scope: merged.scope,
       files: merged.files,
       models: config.models,

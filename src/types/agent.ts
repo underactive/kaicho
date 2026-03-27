@@ -5,6 +5,8 @@ export interface AgentConfig {
   command: string;
   timeoutMs: number;
   model?: string;
+  /** When true, pipe agent stderr to the terminal for visibility */
+  verbose?: boolean;
 }
 
 export type RunStatus =

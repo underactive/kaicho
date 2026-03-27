@@ -1,16 +1,9 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentAdapter } from "../types/index.js";
-import {
-  ClaudeAdapter,
-  CodexAdapter,
-  CursorAdapter,
-  GeminiAdapter,
-} from "../agent-adapters/index.js";
-import { AGENT_CONFIGS } from "../config/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 import { buildValidationPrompt, pickReviewer, type ValidationResult } from "../prompts/validate.js";
-import { parseFromText } from "../output-parser/index.js";
+import { resolveAdapter, ALL_AGENT_NAMES } from "./resolve-adapter.js";
 import { log } from "../logger/index.js";
 
 export interface ValidateOptions {
@@ -21,6 +14,8 @@ export interface ValidateOptions {
   timeoutMs?: number;
   models?: Record<string, string>;
   reviewer?: string;
+  verbose?: boolean;
+  fixerContext?: string;
 }
 
 export interface ValidateResult {
@@ -28,28 +23,6 @@ export interface ValidateResult {
   verdict: "approve" | "concern" | "error" | "skipped";
   rationale: string;
   durationMs: number;
-}
-
-const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
-
-function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
-  const opts: Partial<import("../types/index.js").AgentConfig> = {};
-  if (timeoutMs) opts.timeoutMs = timeoutMs;
-  if (model) opts.model = model;
-  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
-
-  switch (agent) {
-    case "claude":
-      return new ClaudeAdapter(hasOpts);
-    case "codex":
-      return new CodexAdapter(hasOpts);
-    case "cursor":
-      return new CursorAdapter(hasOpts);
-    case "gemini":
-      return new GeminiAdapter(hasOpts);
-    default:
-      throw new Error(`Unknown agent: ${agent}`);
-  }
 }
 
 export async function runValidation(options: ValidateOptions): Promise<ValidateResult> {
@@ -71,7 +44,7 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
     };
   }
 
-  const adapter = resolveAdapter(reviewerName, timeoutMs, options.models?.[reviewerName]);
+  const adapter = resolveAdapter(reviewerName, timeoutMs, options.models?.[reviewerName], options.verbose);
 
   const available = await adapter.isAvailable();
   if (!available) {
@@ -86,7 +59,7 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
       };
     }
 
-    const fallbackAdapter = resolveAdapter(fallback, timeoutMs, options.models?.[fallback]);
+    const fallbackAdapter = resolveAdapter(fallback, timeoutMs, options.models?.[fallback], options.verbose);
     const fallbackAvailable = await fallbackAdapter.isAvailable();
     if (!fallbackAvailable) {
       return {
@@ -97,10 +70,10 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
       };
     }
 
-    return executeValidation(fallback, fallbackAdapter, absRepoPath, cluster, diff, startMs);
+    return executeValidation(fallback, fallbackAdapter, absRepoPath, cluster, diff, startMs, options.fixerContext);
   }
 
-  return executeValidation(reviewerName, adapter, absRepoPath, cluster, diff, startMs);
+  return executeValidation(reviewerName, adapter, absRepoPath, cluster, diff, startMs, options.fixerContext);
 }
 
 async function executeValidation(
@@ -110,8 +83,9 @@ async function executeValidation(
   cluster: SuggestionCluster,
   diff: string,
   startMs: number,
+  fixerContext?: string,
 ): Promise<ValidateResult> {
-  const prompt = buildValidationPrompt(cluster, diff);
+  const prompt = buildValidationPrompt(cluster, diff, fixerContext);
   log("info", "Running validation", { reviewer: reviewerName, cluster: cluster.id });
 
   // Use "review" mode: read-only permissions, no schema enforcement.

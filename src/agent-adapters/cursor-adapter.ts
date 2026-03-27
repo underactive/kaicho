@@ -1,5 +1,6 @@
 import { execa } from "execa";
 import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
+import { DEFAULT_TIMEOUT_MS } from "../config/index.js";
 import { parseFromText } from "../output-parser/index.js";
 import { log } from "../logger/index.js";
 
@@ -10,7 +11,7 @@ export class CursorAdapter implements AgentAdapter {
     this.config = {
       name: "cursor",
       command: "agent",
-      timeoutMs: 300_000,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
       ...config,
     };
   }
@@ -46,11 +47,17 @@ export class CursorAdapter implements AgentAdapter {
 
       log("info", "Starting Cursor agent", { repoPath });
 
-      const result = await execa(this.config.command, args, {
+      const subprocess = execa(this.config.command, args, {
         cwd: repoPath,
         timeout: this.config.timeoutMs,
         reject: false,
       });
+
+      if (this.config.verbose && subprocess.stderr) {
+        subprocess.stderr.pipe(process.stderr, { end: false });
+      }
+
+      const result = await subprocess;
 
       const durationMs = Date.now() - startMs;
 

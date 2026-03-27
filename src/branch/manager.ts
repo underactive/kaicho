@@ -123,6 +123,15 @@ export async function discardFixBranch(
 }
 
 /**
+ * Reset the last commit on the current branch, removing it from history.
+ * Used to undo a failed fix before retrying with a different agent.
+ */
+export async function resetLastCommit(repoPath: string): Promise<void> {
+  await execa("git", ["reset", "--hard", "HEAD~1"], { cwd: repoPath });
+  log("info", "Reset last commit", { repoPath });
+}
+
+/**
  * Switch back to the previous branch, keeping the fix branch.
  */
 export async function keepFixBranch(

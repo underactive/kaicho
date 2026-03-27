@@ -7,6 +7,7 @@ import type { SuggestionCluster } from "../dedup/index.js";
 export function buildValidationPrompt(
   cluster: SuggestionCluster,
   diff: string,
+  fixerContext?: string | null,
 ): string {
   const location = cluster.line
     ? `${cluster.file}:${cluster.line}`
@@ -30,11 +31,19 @@ DIFF APPLIED:
 \`\`\`diff
 ${diff}
 \`\`\`
+${fixerContext ? `
+FIXER'S DECISION CONTEXT:
+${fixerContext}
 
-Review this diff and determine:
-1. Does it correctly address the original finding?
-2. Does it introduce any new bugs, security issues, or regressions?
-3. Is the fix complete, or does it miss edge cases?
+Review the fix ONLY against the stated problem and the fixer's constraints above.
+` : ""}
+Your ONLY job is to determine:
+1. Does this change fix the reported issue? (yes/no)
+2. Does it introduce a regression or break existing tests? (yes/no)
+3. Is there a security vulnerability? (yes/no)
+
+If all answers are satisfactory, you MUST approve.
+Do NOT comment on style, alternative approaches, or hypothetical edge cases.
 
 Respond with ONLY a JSON object in this exact format:
 {"verdict": "approve" or "concern", "rationale": "one paragraph explaining your assessment"}

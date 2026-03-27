@@ -1,16 +1,9 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentAdapter, RunResult } from "../types/index.js";
-import {
-  ClaudeAdapter,
-  CodexAdapter,
-  CursorAdapter,
-  GeminiAdapter,
-} from "../agent-adapters/index.js";
-import { AGENT_CONFIGS } from "../config/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
-import { buildFixPrompt } from "../prompts/index.js";
+import { buildFixPrompt, extractFixerContext } from "../prompts/index.js";
 import { buildCommitMessage } from "./commit-message.js";
+import { resolveAdapter } from "./resolve-adapter.js";
 import {
   ensureCleanWorkTree,
   createFixBranch,
@@ -35,6 +28,7 @@ export interface FixOptions {
   agent?: string;
   timeoutMs?: number;
   model?: string;
+  verbose?: boolean;
   onProgress?: (progress: FixProgress) => void;
 }
 
@@ -47,30 +41,7 @@ export interface FixResult {
   filesChanged: number;
   durationMs: number;
   error?: string;
-}
-
-const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
-
-function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
-  const opts: Partial<import("../types/index.js").AgentConfig> = {};
-  if (timeoutMs) opts.timeoutMs = timeoutMs;
-  if (model) opts.model = model;
-  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
-
-  switch (agent) {
-    case "claude":
-      return new ClaudeAdapter(hasOpts);
-    case "codex":
-      return new CodexAdapter(hasOpts);
-    case "cursor":
-      return new CursorAdapter(hasOpts);
-    case "gemini":
-      return new GeminiAdapter(hasOpts);
-    default:
-      throw new Error(
-        `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
-      );
-  }
+  fixerContext?: string;
 }
 
 /**
@@ -116,7 +87,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
 
   try {
     notify({ step: "check-agent", agent: agentName, branch });
-    const adapter = resolveAdapter(agentName, timeoutMs, options.model);
+    const adapter = resolveAdapter(agentName, timeoutMs, options.model, options.verbose);
 
     const available = await adapter.isAvailable();
     if (!available) {
@@ -192,6 +163,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
       diff,
       filesChanged,
       durationMs: Date.now() - startMs,
+      fixerContext: extractFixerContext(result.rawOutput) ?? undefined,
     };
   } catch (err) {
     // Best-effort cleanup

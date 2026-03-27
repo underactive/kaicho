@@ -1,23 +1,15 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentAdapter } from "../types/index.js";
-import {
-  ClaudeAdapter,
-  CodexAdapter,
-  CursorAdapter,
-  GeminiAdapter,
-} from "../agent-adapters/index.js";
-import { AGENT_CONFIGS } from "../config/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
-import { buildFixPrompt } from "../prompts/index.js";
+import { buildFixPrompt, extractFixerContext } from "../prompts/index.js";
+import { resolveAdapter } from "./resolve-adapter.js";
+import { executeRetry } from "./batch-fix-retry.js";
 import { buildCommitMessage } from "./commit-message.js";
 import {
   ensureCleanWorkTree,
   createFixBranch,
   captureDiff,
   commitFix,
-  discardFixBranch,
-  keepFixBranch,
 } from "../branch/index.js";
 import { recordFix } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
@@ -31,6 +23,10 @@ export interface BatchFixItemResult {
   durationMs: number;
   diff: string;
   error?: string;
+  /** Set when this result is from a retry — suppresses further retry options */
+  retryOf?: string;
+  /** Fixer agent's decision context (approach, alternatives, tradeoffs) */
+  fixerContext?: string;
 }
 
 export interface BatchFixResult {
@@ -56,6 +52,14 @@ export interface BatchFixProgress {
 
 export type BatchFixAction = "continue" | "skip" | "stop";
 
+export interface BatchFixRetryAction {
+  action: "retry";
+  reviewer: string;
+  concern: string;
+}
+
+export type BatchFixConfirmResult = BatchFixAction | BatchFixRetryAction;
+
 export interface BatchFixOptions {
   repoPath: string;
   clusters: SuggestionCluster[];
@@ -63,37 +67,14 @@ export interface BatchFixOptions {
   timeoutMs?: number;
   models?: Record<string, string>;
   auto?: boolean;
+  verbose?: boolean;
   onProgress?: (progress: BatchFixProgress) => void;
   onConfirm?: (
     item: BatchFixItemResult,
     cluster: SuggestionCluster,
     current: number,
     total: number,
-  ) => Promise<BatchFixAction>;
-}
-
-const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
-
-function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
-  const opts: Partial<import("../types/index.js").AgentConfig> = {};
-  if (timeoutMs) opts.timeoutMs = timeoutMs;
-  if (model) opts.model = model;
-  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
-
-  switch (agent) {
-    case "claude":
-      return new ClaudeAdapter(hasOpts);
-    case "codex":
-      return new CodexAdapter(hasOpts);
-    case "cursor":
-      return new CursorAdapter(hasOpts);
-    case "gemini":
-      return new GeminiAdapter(hasOpts);
-    default:
-      throw new Error(
-        `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
-      );
-  }
+  ) => Promise<BatchFixConfirmResult>;
 }
 
 function pickAgent(cluster: SuggestionCluster, override?: string): string {
@@ -155,7 +136,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
         agent: agentName,
       });
 
-      const adapter = resolveAdapter(agentName, timeoutMs, options.models?.[agentName]);
+      const adapter = resolveAdapter(agentName, timeoutMs, options.models?.[agentName], options.verbose);
       const available = await adapter.isAvailable();
 
       if (!available) {
@@ -235,6 +216,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
         filesChanged,
         durationMs: Date.now() - fixStartMs,
         diff,
+        fixerContext: extractFixerContext(result.rawOutput) ?? undefined,
       };
       items.push(item);
       totalApplied++;
@@ -262,8 +244,43 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       if (!auto && options.onConfirm) {
         const action = await options.onConfirm(item, cluster, i + 1, clusters.length);
         if (action === "stop") break;
-        // "skip" doesn't make sense after applying — it's already committed.
-        // "continue" proceeds to next.
+        if (typeof action === "object" && action.action === "retry") {
+          totalApplied--;
+          modifiedFiles.delete(cluster.file);
+
+          const retryAdapter = resolveAdapter(action.reviewer, timeoutMs, options.models?.[action.reviewer], options.verbose);
+          const { item: retryItem, applied } = await executeRetry({
+            reviewer: action.reviewer,
+            concern: action.concern,
+            adapter: retryAdapter,
+            repoPath: absRepoPath,
+            previousBranch,
+            branch,
+            cluster,
+            originalAgent: agentName,
+            originalDiff: item.diff,
+            fixStartMs,
+            index: i + 1,
+            total: clusters.length,
+            notify,
+          });
+
+          items[items.length - 1] = retryItem;
+          if (applied) {
+            totalApplied++;
+            modifiedFiles.add(cluster.file);
+          } else {
+            if (retryItem.status === "agent-error") totalFailed++;
+            else totalSkipped++;
+            continue;
+          }
+
+          // Re-confirm after retry — no further retries (retryOf is set)
+          if (options.onConfirm) {
+            const retryAction = await options.onConfirm(retryItem, cluster, i + 1, clusters.length);
+            if (retryAction === "stop") break;
+          }
+        }
       }
     }
 

@@ -1,6 +1,6 @@
 import type { AgentConfig } from "../types/index.js";
 
-export const DEFAULT_TIMEOUT_MS = 600_000; // 10 minutes — full-repo scans take 5-9 min
+export const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 
 export const KAICHO_DIR = ".kaicho";
 export const RUNS_DIR = "runs";

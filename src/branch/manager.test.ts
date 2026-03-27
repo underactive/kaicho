@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ensureCleanWorkTree, getCurrentBranch } from "./manager.js";
+import { ensureCleanWorkTree, getCurrentBranch, resetLastCommit } from "./manager.js";
 
 vi.mock("execa", () => ({
   execa: vi.fn(),
@@ -38,5 +38,17 @@ describe("getCurrentBranch", () => {
     mockExecaImpl(() => Promise.resolve({ exitCode: 0, stdout: "main\n", stderr: "" }));
     const branch = await getCurrentBranch("/repo");
     expect(branch).toBe("main");
+  });
+});
+
+describe("resetLastCommit", () => {
+  it("runs git reset --hard HEAD~1", async () => {
+    mockExecaImpl(() => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }));
+    await resetLastCommit("/repo");
+    expect(mockExeca).toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", "HEAD~1"],
+      { cwd: "/repo" },
+    );
   });
 });

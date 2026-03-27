@@ -8,7 +8,11 @@ import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { applyEnrichedCache } from "./enrich.js";
 import { getFixedClusterIds } from "../../fix-log/index.js";
-import { runFix, resolveFixBranch, runBatchFix, runValidation, type FixProgress, type BatchFixItemResult, type BatchFixAction } from "../../orchestrator/index.js";
+import { runFix, resolveFixBranch, runBatchFix, runValidation, type FixProgress, type BatchFixItemResult, type BatchFixConfirmResult } from "../../orchestrator/index.js";
+import { resolveAdapter } from "../../orchestrator/resolve-adapter.js";
+import { resetLastCommit, captureDiff, commitFix } from "../../branch/index.js";
+import { buildRetryFixPrompt } from "../../prompts/index.js";
+import { buildCommitMessage } from "../../orchestrator/commit-message.js";
 import { loadConfig } from "../../config/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
@@ -27,12 +31,13 @@ export const fixCommand = new Command("fix")
   .option("--cluster <n>", "Cluster number to fix (skip interactive picker)")
   .option("--id <hash>", "Fix a specific finding by short ID")
   .option("--task <task>", "Filter scan results by task type")
-  .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
+  .option("--timeout <ms>", "Agent timeout in milliseconds", "1800000")
   .option("--min-severity <level>", "Minimum severity to show")
   .option("--validate", "Run a second agent to review each fix before keeping")
   .option("--reviewer <agent>", "Agent to use for validation (default: auto-pick)")
   .option("--batch", "Fix all findings on one branch (continue/skip/stop after each)")
   .option("--auto", "Batch fix without confirmations")
+  .option("--verbose", "Show agent stderr output in real-time")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;
     const repoPath = rawRepo.startsWith("~")
@@ -126,6 +131,7 @@ export const fixCommand = new Command("fix")
       cluster,
       agent: agentName,
       timeoutMs: parseInt(opts.timeout as string, 10),
+      verbose: opts.verbose === true,
       onProgress,
     });
 
@@ -165,12 +171,77 @@ export const fixCommand = new Command("fix")
         timeoutMs: parseInt(opts.timeout as string, 10),
         models: config.models,
         reviewer: reviewerOverride,
+        verbose: opts.verbose === true,
+        fixerContext: result.fixerContext,
       });
 
       if (validation.verdict === "approve") {
         process.stdout.write(`  ${color("Approved", "\x1b[32m")} by ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
       } else if (validation.verdict === "concern") {
         process.stdout.write(`  ${color("Concern", "\x1b[33m")} from ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
+
+        const singleAction = await promptSingleFixAction(result.branch, validation.reviewer);
+
+        if (singleAction === "retry") {
+          const retryResult = await retrySingleFix({
+            repoPath,
+            rawRepo,
+            cluster,
+            reviewer: validation.reviewer,
+            concern: validation.rationale,
+            failedDiff: result.diff,
+            previousBranch: result.previousBranch,
+            timeoutMs: parseInt(opts.timeout as string, 10),
+            models: config.models,
+          });
+
+          if (retryResult) {
+            process.stdout.write(`  ${color("Retry applied", "\x1b[32m")} by ${color(validation.reviewer, "\x1b[1m")} (${retryResult.filesChanged} file${retryResult.filesChanged === 1 ? "" : "s"})\n\n`);
+            if (retryResult.diff) process.stdout.write(retryResult.diff + "\n\n");
+
+            // Validate the retry fix (different reviewer since fixer is now the original reviewer)
+            process.stdout.write(`  ${color("Validating retry...", "\x1b[90m")}\n`);
+            const retryValidation = await runValidation({
+              repoPath: rawRepo,
+              cluster,
+              diff: retryResult.diff,
+              fixAgent: validation.reviewer,
+              timeoutMs: parseInt(opts.timeout as string, 10),
+              models: config.models,
+              reviewer: reviewerOverride,
+              verbose: opts.verbose === true,
+            });
+
+            if (retryValidation.verdict === "approve") {
+              process.stdout.write(`  ${color("Approved", "\x1b[32m")} by ${color(retryValidation.reviewer, "\x1b[1m")}: ${retryValidation.rationale}\n\n`);
+            } else if (retryValidation.verdict === "concern") {
+              process.stdout.write(`  ${color("Concern", "\x1b[33m")} from ${color(retryValidation.reviewer, "\x1b[1m")}: ${retryValidation.rationale}\n\n`);
+            } else if (retryValidation.verdict === "skipped") {
+              process.stdout.write(`  ${color("Validation skipped:", "\x1b[90m")} ${retryValidation.rationale}\n\n`);
+            } else {
+              process.stdout.write(`  ${color("Validation error:", "\x1b[31m")} ${retryValidation.rationale}\n\n`);
+            }
+          } else {
+            process.stdout.write(`  ${color("Retry failed or made no changes.", "\x1b[33m")}\n\n`);
+          }
+
+          const retryAction = await promptAction(result.branch);
+          await resolveFixBranch(rawRepo, result.branch, result.previousBranch, retryAction);
+          if (retryAction === "keep") {
+            process.stdout.write(`  Branch ${color(result.branch, "\x1b[1m")} kept. Review and merge when ready.\n\n`);
+          } else {
+            process.stdout.write(`  Branch discarded.\n\n`);
+          }
+          return;
+        } else if (singleAction === "discard") {
+          await resolveFixBranch(rawRepo, result.branch, result.previousBranch, "discard");
+          process.stdout.write(`  Branch discarded.\n\n`);
+          return;
+        }
+        // "keep" falls through to normal keep flow
+        await resolveFixBranch(rawRepo, result.branch, result.previousBranch, "keep");
+        process.stdout.write(`  Branch ${color(result.branch, "\x1b[1m")} kept. Review and merge when ready.\n\n`);
+        return;
       } else if (validation.verdict === "skipped") {
         process.stdout.write(`  ${color("Validation skipped:", "\x1b[90m")} ${validation.rationale}\n\n`);
       } else {
@@ -336,8 +407,9 @@ async function handleBatchFix(
       repoPath: rawRepo,
       clusters,
       agent: opts["agent"] as string | undefined,
-      timeoutMs: parseInt((opts["timeout"] as string) ?? "300000", 10),
+      timeoutMs: parseInt((opts["timeout"] as string) ?? "1800000", 10),
       auto: isAuto,
+      verbose: opts["verbose"] === true,
       onProgress: (p) => {
         if (isTTY) {
           if (p.step === "starting") {
@@ -371,9 +443,11 @@ async function handleBatchFix(
             cluster,
             diff: item.diff,
             fixAgent: item.agent,
-            timeoutMs: parseInt((opts["timeout"] as string) ?? "300000", 10),
+            timeoutMs: parseInt((opts["timeout"] as string) ?? "1800000", 10),
             models: config?.models,
             reviewer: reviewerOverride,
+            verbose: opts["verbose"] === true,
+            fixerContext: item.fixerContext,
           });
 
           if (validation.verdict === "approve") {
@@ -382,6 +456,11 @@ async function handleBatchFix(
             out.write(`  ${color("Concern", "\x1b[33m")} from ${color(validation.reviewer, "\x1b[1m")}: ${validation.rationale}\n\n`);
             // In auto mode, skip fixes with concerns
             if (isAuto) return "skip";
+            // Offer retry only if this isn't already a retry
+            const retryCtx = !item.retryOf
+              ? { reviewer: validation.reviewer, concern: validation.rationale }
+              : undefined;
+            return promptBatchAction(current, total, retryCtx);
           } else {
             out.write(`  ${color("Validation:", "\x1b[90m")} ${validation.rationale}\n\n`);
           }
@@ -419,15 +498,79 @@ async function handleBatchFix(
   }
 }
 
-async function promptBatchAction(current: number, total: number): Promise<BatchFixAction> {
+async function promptSingleFixAction(
+  branch: string,
+  reviewer: string,
+): Promise<"keep" | "discard" | "retry"> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stderr,
   });
 
   try {
-    const answer = await rl.question(`  [${current}/${total}] Continue / Skip / Stop? (c/s/x): `);
+    const answer = await rl.question(
+      `  Keep / Discard / ${color(`Retry with ${reviewer}`, "\x1b[36m")}? (k/d/r): `,
+    );
     const ch = answer.trim().toLowerCase();
+    if (ch.startsWith("r")) return "retry";
+    if (ch.startsWith("d")) return "discard";
+    return "keep";
+  } finally {
+    rl.close();
+  }
+}
+
+interface RetrySingleFixOpts {
+  repoPath: string;
+  rawRepo: string;
+  cluster: SuggestionCluster;
+  reviewer: string;
+  concern: string;
+  failedDiff: string;
+  previousBranch: string;
+  timeoutMs: number;
+  models?: Record<string, string>;
+}
+
+async function retrySingleFix(
+  opts: RetrySingleFixOpts,
+): Promise<{ diff: string; filesChanged: number } | null> {
+  await resetLastCommit(opts.repoPath);
+
+  const adapter = resolveAdapter(opts.reviewer, opts.timeoutMs, opts.models?.[opts.reviewer]);
+  const prompt = buildRetryFixPrompt(opts.cluster, opts.failedDiff, opts.concern);
+
+  process.stdout.write(`  ${color(`Retrying with ${opts.reviewer}...`, "\x1b[90m")}\n`);
+
+  const result = await adapter.run(opts.repoPath, prompt, "fix");
+  if (result.status !== "success") return null;
+
+  const { diff, filesChanged } = await captureDiff(opts.repoPath, opts.previousBranch);
+  if (filesChanged === 0) return null;
+
+  await commitFix(opts.repoPath, buildCommitMessage(opts.cluster, opts.reviewer));
+  return { diff, filesChanged };
+}
+
+async function promptBatchAction(
+  current: number,
+  total: number,
+  retryContext?: { reviewer: string; concern: string },
+): Promise<BatchFixConfirmResult> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+
+  try {
+    const retryHint = retryContext
+      ? ` / ${color(`Retry with ${retryContext.reviewer}`, "\x1b[36m")} (r)`
+      : "";
+    const answer = await rl.question(`  [${current}/${total}] Continue / Skip / Stop${retryHint}? (c/s/x${retryContext ? "/r" : ""}): `);
+    const ch = answer.trim().toLowerCase();
+    if (ch.startsWith("r") && retryContext) {
+      return { action: "retry", reviewer: retryContext.reviewer, concern: retryContext.concern };
+    }
     if (ch.startsWith("s")) return "skip";
     if (ch.startsWith("x") || ch.startsWith("q")) return "stop";
     return "continue";

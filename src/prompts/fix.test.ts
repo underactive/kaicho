@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFixPrompt } from "./fix.js";
+import { buildFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
 function makeCluster(overrides: Partial<SuggestionCluster> = {}): SuggestionCluster {
@@ -55,5 +55,66 @@ describe("buildFixPrompt", () => {
     const prompt = buildFixPrompt(makeCluster());
     expect(prompt).toContain("minimal, targeted fix");
     expect(prompt).toContain("Do NOT refactor");
+  });
+});
+
+describe("buildRetryFixPrompt", () => {
+  const failedDiff = `--- a/src/api.ts\n+++ b/src/api.ts\n@@ -40,3 +40,3 @@\n-const q = "SELECT * FROM " + table;\n+const q = \`SELECT * FROM \${table}\`;`;
+  const concern = "Template literals still allow injection. Use parameterized queries instead.";
+
+  it("includes the failed diff", () => {
+    const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern);
+    expect(prompt).toContain("PREVIOUS FIX THAT WAS REJECTED");
+    expect(prompt).toContain(failedDiff);
+  });
+
+  it("includes the reviewer concern", () => {
+    const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern);
+    expect(prompt).toContain("REVIEWER'S CONCERN");
+    expect(prompt).toContain("Template literals still allow injection");
+  });
+
+  it("instructs a different approach", () => {
+    const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern);
+    expect(prompt).toContain("DIFFERENT, better fix");
+    expect(prompt).toContain("Do NOT repeat the same approach");
+  });
+
+  it("preserves original finding context", () => {
+    const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern);
+    expect(prompt).toContain("src/api.ts:42");
+    expect(prompt).toContain("SEVERITY: high");
+    expect(prompt).toContain("claude: SQL injection");
+  });
+});
+
+describe("extractFixerContext", () => {
+  it("extracts from plain text", () => {
+    const output = `I fixed the SQL injection.\n<FIX_CONTEXT>\nApproach: Used parameterized queries\nAlternatives rejected: ORM was overkill\nTradeoffs: Slightly more verbose\n</FIX_CONTEXT>`;
+    const ctx = extractFixerContext(output);
+    expect(ctx).toContain("Used parameterized queries");
+    expect(ctx).toContain("ORM was overkill");
+  });
+
+  it("extracts from Claude JSON wrapper", () => {
+    const output = JSON.stringify({
+      type: "result",
+      result: "Done.\n<FIX_CONTEXT>\nApproach: Replaced concat with prepared statement\nAlternatives rejected: None\nTradeoffs: None\n</FIX_CONTEXT>",
+    });
+    const ctx = extractFixerContext(output);
+    expect(ctx).toContain("Replaced concat with prepared statement");
+  });
+
+  it("extracts from Gemini JSON wrapper", () => {
+    const output = JSON.stringify({
+      response: "Fixed.\n<FIX_CONTEXT>\nApproach: Added input validation\nAlternatives rejected: WAF rule\nTradeoffs: Minor perf hit\n</FIX_CONTEXT>",
+    });
+    const ctx = extractFixerContext(output);
+    expect(ctx).toContain("Added input validation");
+  });
+
+  it("returns null when no context block", () => {
+    expect(extractFixerContext("just some output")).toBeNull();
+    expect(extractFixerContext(JSON.stringify({ result: "no context here" }))).toBeNull();
   });
 });
