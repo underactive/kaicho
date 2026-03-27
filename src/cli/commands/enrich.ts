@@ -197,37 +197,48 @@ export async function applyEnrichedCache(
   clusters: SuggestionCluster[],
   task?: string,
 ): Promise<void> {
-  // Try task-specific cache first, then generic
-  const paths = task
-    ? [path.join(repoPath, KAICHO_DIR, enrichedFileName(task)), path.join(repoPath, KAICHO_DIR, enrichedFileName())]
-    : [path.join(repoPath, KAICHO_DIR, enrichedFileName())];
+  // Collect all enriched files to load
+  const cacheFiles: string[] = [];
 
-  let cachePath: string | null = null;
-  for (const p of paths) {
-    try {
-      await fs.access(p);
-      cachePath = p;
-      break;
-    } catch { continue; }
+  if (task) {
+    cacheFiles.push(path.join(repoPath, KAICHO_DIR, enrichedFileName(task)));
   }
 
-  if (!cachePath) return;
-
-  let data: EnrichedData;
+  // Always also try loading all per-task caches (covers the no-task-filter case)
   try {
-    const content = await fs.readFile(cachePath, "utf-8");
-    data = JSON.parse(content) as EnrichedData;
+    const kaichoDir = path.join(repoPath, KAICHO_DIR);
+    const files = await fs.readdir(kaichoDir);
+    for (const f of files) {
+      if (f.startsWith("enriched-") && f.endsWith(".json")) {
+        const fullPath = path.join(kaichoDir, f);
+        if (!cacheFiles.includes(fullPath)) {
+          cacheFiles.push(fullPath);
+        }
+      }
+    }
   } catch {
-    return; // No cache
+    // No .kaicho dir
   }
 
+  // Also try generic enriched.json
+  cacheFiles.push(path.join(repoPath, KAICHO_DIR, enrichedFileName()));
+
+  // Build summary map from all available cache files
   const summaryById = new Map<string, string>();
-  const rawEntries = (data.entries ?? (data as unknown as Record<string, unknown>)["clusters"] ?? []) as unknown as Array<Record<string, unknown>>;
-  for (const entry of rawEntries) {
-    const id = entry["id"] as string | undefined;
-    const summary = entry["summary"] as string | undefined;
-    if (id && summary) {
-      summaryById.set(id, summary);
+  for (const cachePath of cacheFiles) {
+    try {
+      const content = await fs.readFile(cachePath, "utf-8");
+      const data = JSON.parse(content) as EnrichedData;
+      const rawEntries = (data.entries ?? (data as unknown as Record<string, unknown>)["clusters"] ?? []) as unknown as Array<Record<string, unknown>>;
+      for (const entry of rawEntries) {
+        const id = entry["id"] as string | undefined;
+        const summary = entry["summary"] as string | undefined;
+        if (id && summary && !summaryById.has(id)) {
+          summaryById.set(id, summary);
+        }
+      }
+    } catch {
+      continue;
     }
   }
 
