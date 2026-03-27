@@ -48,7 +48,10 @@ suggestions. Everything in this repo serves that loop.
 4. Run `npm test` before opening a PR. Run `npm run lint` to catch structural
    violations.
 5. If you add a new domain or package, update ARCHITECTURE.md.
-6. If you change a product behavior, update the relevant product spec.
+6. If you add or change a user-facing behavior, update the relevant spec in
+   [docs/product-specs/](docs/product-specs/). If no spec exists for the
+   feature, **create one** and add it to the index in
+   [docs/product-specs/index.md](docs/product-specs/index.md).
 7. If you discover tech debt, log it in
    [docs/exec-plans/tech-debt-tracker.md](docs/exec-plans/tech-debt-tracker.md).
 
