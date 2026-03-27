@@ -1,3 +1,6 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { KAICHO_DIR } from "../config/index.js";
 import { log } from "../logger/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
@@ -136,4 +139,29 @@ export async function summarizeClusters(
 
   log("info", "Generated summaries", { count, total });
   return count;
+}
+
+/**
+ * Persist enriched summaries to the cache file so report/fix can load them.
+ */
+export async function saveEnrichedCache(
+  repoPath: string,
+  clusters: SuggestionCluster[],
+  task?: string,
+): Promise<void> {
+  const entries = clusters
+    .filter((c) => c.summary)
+    .map((c) => ({ id: c.id, file: c.file, summary: c.summary! }));
+
+  if (entries.length === 0) return;
+
+  const fileName = task ? `enriched-${task}.json` : "enriched.json";
+  const cachePath = path.join(repoPath, KAICHO_DIR, fileName);
+
+  await fs.mkdir(path.dirname(cachePath), { recursive: true });
+  await fs.writeFile(
+    cachePath,
+    JSON.stringify({ generatedAt: new Date().toISOString(), model: "auto", entries }, null, 2),
+    "utf-8",
+  );
 }
