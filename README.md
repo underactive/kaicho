@@ -55,7 +55,8 @@ Run agents against a repository. All installed agents run in parallel.
 
 ```
 Options:
-  --agent <agent>         Agent to use (omit for all available)
+  --agents <agents>       Agents to run (comma-separated, default: all available)
+  --exclude <agents>      Exclude agents (comma-separated)
   --task <task>           Task: security, qa, docs (default: security)
   --repo <path>           Path to target repository (default: .)
   --timeout <ms>          Agent timeout in milliseconds (default: 600000)
@@ -63,6 +64,8 @@ Options:
   --files <patterns>      Limit to file patterns (comma-separated)
   --min-severity <level>  Filter: critical, high, medium, low, info
   --json                  JSON output (auto-enabled when piped)
+  --verbose               Show detailed output
+  --debug                 Show raw agent output
 ```
 
 ### `kaicho fix`
@@ -72,14 +75,16 @@ Apply fixes for scan findings using AI agents on isolated git branches.
 ```
 Options:
   --repo <path>           Path to target repository (default: .)
-  --agent <agent>         Agent to use (default: agent that found the issue)
+  --agent <agent>         Agent to use for fixing (default: agent that found the issue)
   --id <hash>             Fix a specific finding by short ID
   --cluster <n>           Fix by cluster number
   --task <task>           Filter findings by task type
+  --timeout <ms>          Agent timeout in milliseconds (default: 600000)
   --min-severity <level>  Minimum severity to fix
+  --validate              Run a second agent to review the fix
+  --reviewer <agent>      Agent for validation (default: auto-pick different from fixer)
   --batch                 Fix all findings on one branch (continue/skip/stop)
   --auto                  Batch fix without confirmations
-  --timeout <ms>          Agent timeout in milliseconds (default: 600000)
 ```
 
 ### `kaicho report`
@@ -95,6 +100,7 @@ Options:
   --last <n>              Show last N runs (default: latest per agent)
   --min-severity <level>  Filter by minimum severity
   --json                  JSON output
+  --verbose               Show detailed output
 ```
 
 ### `kaicho enrich`
@@ -127,7 +133,13 @@ Create `kaicho.config.json` in your repo root (or run `kaicho init`):
   "scope": "src",
   "files": "*.ts,*.js",
   "timeout": 600000,
-  "minSeverity": "medium"
+  "minSeverity": "medium",
+  "models": {
+    "codex": "o4-mini",
+    "gemini": "gemini-2.5-pro"
+  },
+  "reviewer": "claude",
+  "retention": 3
 }
 ```
 
