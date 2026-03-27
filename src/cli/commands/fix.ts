@@ -7,7 +7,7 @@ import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { applyEnrichedCache } from "./enrich.js";
-import { runFix, resolveFixBranch, type FixProgress } from "../../orchestrator/index.js";
+import { runFix, resolveFixBranch, runBatchFix, type FixProgress, type BatchFixItemResult, type BatchFixAction } from "../../orchestrator/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
 
@@ -27,6 +27,8 @@ export const fixCommand = new Command("fix")
   .option("--task <task>", "Filter scan results by task type")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
   .option("--min-severity <level>", "Minimum severity to show")
+  .option("--batch", "Fix all findings on one branch (continue/skip/stop after each)")
+  .option("--auto", "Batch fix without confirmations")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;
     const repoPath = rawRepo.startsWith("~")
@@ -43,6 +45,12 @@ export const fixCommand = new Command("fix")
     if (filtered.length === 0) {
       process.stderr.write("  No findings to fix. Run 'kaicho scan' first.\n\n");
       process.exit(1);
+    }
+
+    // Batch mode: fix all findings on one branch
+    if (opts.batch || opts.auto) {
+      await handleBatchFix(rawRepo, filtered, opts);
+      return;
     }
 
     // Pick a cluster by --id, --cluster, or interactive picker
@@ -268,4 +276,91 @@ async function loadClusters(
   const clusters = clusterSuggestions(results);
   await applyEnrichedCache(repoPath, clusters, task);
   return clusters;
+}
+
+async function handleBatchFix(
+  rawRepo: string,
+  clusters: SuggestionCluster[],
+  opts: Record<string, unknown>,
+): Promise<void> {
+  const out = process.stdout;
+  const isTTY = process.stderr.isTTY;
+  const isAuto = opts["auto"] === true;
+
+  out.write(`\n  Batch fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"}${isAuto ? " (auto mode)" : ""}...\n\n`);
+
+  try {
+    const result = await runBatchFix({
+      repoPath: rawRepo,
+      clusters,
+      agent: opts["agent"] as string | undefined,
+      timeoutMs: parseInt((opts["timeout"] as string) ?? "300000", 10),
+      auto: isAuto,
+      onProgress: (p) => {
+        if (isTTY) {
+          if (p.step === "starting") {
+            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${p.file} — starting with ${p.agent}...\n`);
+          } else if (p.step === "running-agent") {
+            // already printed "starting"
+          } else if (p.step === "applied") {
+            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("applied", "\x1b[32m")} (${p.filesChanged} file${p.filesChanged === 1 ? "" : "s"})\n`);
+          } else if (p.step === "no-changes") {
+            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("no changes", "\x1b[33m")}\n`);
+          } else if (p.step === "failed") {
+            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("failed", "\x1b[31m")} — ${p.error}\n`);
+          }
+        } else {
+          process.stderr.write(JSON.stringify({ type: "batch-fix.progress", ...p }) + "\n");
+        }
+      },
+      onConfirm: isAuto ? undefined : async (item, cluster, current, total) => {
+        if (item.diff) {
+          out.write(`\n${item.diff}\n`);
+        }
+        return promptBatchAction(current, total);
+      },
+    });
+
+    // Summary
+    const duration = (result.totalDurationMs / 1000).toFixed(1);
+    out.write(`\n  ${color("Batch complete:", "\x1b[1m")} ${result.totalApplied} applied, ${result.totalSkipped} skipped, ${result.totalFailed} failed (${duration}s)\n`);
+    out.write(`  Branch: ${color(result.branch, "\x1b[1m")}\n\n`);
+
+    if (result.totalApplied === 0) {
+      out.write("  No changes were made. Discarding branch.\n\n");
+      await resolveFixBranch(rawRepo, result.branch, result.previousBranch, "discard");
+      return;
+    }
+
+    // Ask user what to do with the branch
+    const action = await promptAction(result.branch);
+    await resolveFixBranch(rawRepo, result.branch, result.previousBranch, action);
+
+    if (action === "keep") {
+      out.write(`  Branch ${color(result.branch, "\x1b[1m")} kept with ${result.totalApplied} fix${result.totalApplied === 1 ? "" : "es"}. Review and merge when ready.\n\n`);
+    } else {
+      out.write("  Branch discarded.\n\n");
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`  ${color("Error:", "\x1b[31m")} ${msg}\n\n`);
+    process.exit(1);
+  }
+}
+
+async function promptBatchAction(current: number, total: number): Promise<BatchFixAction> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+
+  try {
+    const answer = await rl.question(`  [${current}/${total}] Continue / Skip / Stop? (c/s/x): `);
+    const ch = answer.trim().toLowerCase();
+    if (ch.startsWith("s")) return "skip";
+    if (ch.startsWith("x") || ch.startsWith("q")) return "stop";
+    return "continue";
+  } finally {
+    rl.close();
+  }
 }

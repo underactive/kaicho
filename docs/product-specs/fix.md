@@ -27,9 +27,16 @@ writing the code myself.
 - Working tree is dirty → error suggesting commit/stash
 - Agent that found the issue is not installed → fall back to next available, or error with `--agent` override hint
 
-## Not in scope (Phase A)
+## Batch mode (Phase B)
 
-- Batch fixing multiple clusters in one run
+- `--batch` iterates all findings on one branch with continue/skip/stop
+- `--auto` skips confirmations (applies all fixes without prompting)
+- Each fix gets its own commit (individually revertable)
+- Summary at the end: N applied, N skipped, N failed
+- One branch to merge: `kaicho/fix-<hash>`
+
+## Not in scope
+
 - Auto-merging the fix branch
-- Cross-agent validation of fixes
+- Cross-agent validation of fixes (Phase C)
 - Freeform fix instructions (not from scan results)
