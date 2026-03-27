@@ -4,7 +4,7 @@ import type { SuggestionCluster } from "../dedup/index.js";
 const {
   mockEnsureClean, mockGetCurrentBranch, mockCaptureDiff, mockCommitFix,
   mockCreateWorktree, mockRemoveWorktree, mockPruneWorktrees, mockCleanupBase,
-  mockRecordFix, mockAdapterRun, mockIsAvailable,
+  mockRecordFix, mockRecordDiscardedFix, mockAdapterRun, mockIsAvailable,
 } = vi.hoisted(() => ({
   mockEnsureClean: vi.fn().mockResolvedValue(undefined),
   mockGetCurrentBranch: vi.fn().mockResolvedValue("main"),
@@ -18,6 +18,7 @@ const {
   mockPruneWorktrees: vi.fn().mockResolvedValue(undefined),
   mockCleanupBase: vi.fn().mockResolvedValue(undefined),
   mockRecordFix: vi.fn().mockResolvedValue(undefined),
+  mockRecordDiscardedFix: vi.fn().mockResolvedValue(undefined),
   mockAdapterRun: vi.fn().mockResolvedValue({
     agent: "claude", status: "success", suggestions: [],
     rawOutput: "", rawError: "", durationMs: 1000, startedAt: new Date().toISOString(),
@@ -53,6 +54,7 @@ vi.mock("../branch/index.js", () => ({
 
 vi.mock("../fix-log/index.js", () => ({
   recordFix: mockRecordFix,
+  recordDiscardedFix: mockRecordDiscardedFix,
 }));
 
 vi.mock("../config/index.js", () => ({
@@ -189,6 +191,11 @@ describe("runParallelFix", () => {
     expect(result.totalDiscarded).toBe(1);
     expect(result.keptBranches).toHaveLength(0);
     expect(mockRecordFix).not.toHaveBeenCalled();
+    expect(mockRecordDiscardedFix).toHaveBeenCalledTimes(1);
+    expect(mockRecordDiscardedFix).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ clusterId: "a1", reason: "user-discard" }),
+    );
   });
 
   it("prunes stale worktrees at start", async () => {

@@ -16,7 +16,7 @@ import {
   cleanupWorktreeBase,
 } from "../branch/index.js";
 import { runValidation, type ValidateResult } from "./run-validate.js";
-import { recordFix } from "../fix-log/index.js";
+import { recordFix, recordDiscardedFix } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
 
 export interface ParallelFixItemResult {
@@ -87,6 +87,32 @@ export interface ParallelFixOptions {
     current: number,
     total: number,
   ) => Promise<ParallelFixConfirmResult>;
+}
+
+import type { DiscardedFixEntry } from "../fix-log/index.js";
+
+function buildDiscardedEntry(
+  item: ParallelFixItemResult,
+  cluster: SuggestionCluster,
+  reason: DiscardedFixEntry["reason"],
+): DiscardedFixEntry {
+  return {
+    clusterId: item.clusterId,
+    file: item.file,
+    line: cluster.line,
+    category: cluster.category,
+    severity: cluster.severity,
+    summary: cluster.summary ?? null,
+    fixAgent: item.agent,
+    fixDiff: item.diff,
+    fixerContext: item.fixerContext ?? null,
+    reviewer: item.validation?.reviewer ?? null,
+    verdict: item.validation?.verdict ?? null,
+    reviewerRationale: item.validation?.rationale ?? null,
+    retryAttempted: !!item.retryOf,
+    discardedAt: new Date().toISOString(),
+    reason,
+  };
 }
 
 function pickAgent(cluster: SuggestionCluster, override?: string): string {
@@ -239,6 +265,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
       if (options.auto) {
         // Auto mode: keep approved, discard concerns
         if (item.validation?.verdict === "concern") {
+          await recordDiscardedFix(absRepoPath, buildDiscardedEntry(item, clusters[orderMap.get(item.clusterId)!]!, "auto-concern"));
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
           totalDiscarded++;
         } else {
@@ -264,6 +291,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
           keptBranches.push(item.branch);
           totalKept++;
         } else if (action === "discard") {
+          await recordDiscardedFix(absRepoPath, buildDiscardedEntry(item, clusters[orderMap.get(item.clusterId)!]!, "user-discard"));
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
           totalDiscarded++;
         } else if (typeof action === "object" && action.action === "retry") {
@@ -298,11 +326,13 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
                 keptBranches.push(item.branch);
                 totalKept++;
               } else {
+                await recordDiscardedFix(absRepoPath, buildDiscardedEntry(retryItem, cluster, "user-discard"));
                 await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
                 totalDiscarded++;
               }
             }
           } else {
+            await recordDiscardedFix(absRepoPath, buildDiscardedEntry(retryItem, cluster, "retry-failed"));
             await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
             totalDiscarded++;
           }
