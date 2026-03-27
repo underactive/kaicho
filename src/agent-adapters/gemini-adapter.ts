@@ -38,7 +38,7 @@ export class GeminiAdapter implements AgentAdapter {
         args.push("-m", this.config.model);
       }
 
-      if (mode === "scan") {
+      if (mode === "scan" || mode === "review") {
         args.push("--sandbox");
       } else {
         args.push("--approval-mode", "auto_edit");
@@ -80,7 +80,7 @@ export class GeminiAdapter implements AgentAdapter {
         };
       }
 
-      if (mode === "fix") {
+      if (mode === "fix" || mode === "review") {
         return {
           agent: this.config.name,
           status: "success",

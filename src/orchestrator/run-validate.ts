@@ -114,7 +114,9 @@ async function executeValidation(
   const prompt = buildValidationPrompt(cluster, diff);
   log("info", "Running validation", { reviewer: reviewerName, cluster: cluster.id });
 
-  const result = await adapter.run(repoPath, prompt, "scan"); // read-only mode for review
+  // Use "review" mode: read-only permissions, no schema enforcement.
+  // The verdict is parsed from rawOutput by extractVerdict().
+  const result = await adapter.run(repoPath, prompt, "review");
 
   if (result.status !== "success") {
     return {

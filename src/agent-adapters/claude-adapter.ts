@@ -43,6 +43,8 @@ export class ClaudeAdapter implements AgentAdapter {
       if (mode === "scan") {
         args.push("--json-schema", JSON.stringify(SUGGESTIONS_JSON_SCHEMA));
         args.push("--permission-mode", "plan");
+      } else if (mode === "review") {
+        args.push("--permission-mode", "plan"); // read-only, no schema
       } else {
         args.push("--permission-mode", "acceptEdits");
       }
@@ -83,8 +85,8 @@ export class ClaudeAdapter implements AgentAdapter {
         };
       }
 
-      // Fix mode: no structured output to parse, success = agent ran without error
-      if (mode === "fix") {
+      // Fix/review mode: no structured output to parse
+      if (mode === "fix" || mode === "review") {
         return {
           agent: this.config.name,
           status: "success",

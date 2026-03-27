@@ -62,18 +62,21 @@ export class CodexAdapter implements AgentAdapter {
         );
         args.push(
           "-s", "read-only",
-
-
           "--json",
           "-C", absRepoPath,
           "--output-schema", schemaPath,
           "-o", outputPath,
         );
+      } else if (mode === "review") {
+        args.push(
+          "-s", "read-only",
+          "--json",
+          "-C", absRepoPath,
+          "-o", outputPath,
+        );
       } else {
         args.push(
           "--full-auto",
-
-
           "--json",
           "-C", absRepoPath,
         );
@@ -127,6 +130,26 @@ export class CodexAdapter implements AgentAdapter {
           status: "success",
           suggestions: [],
           rawOutput: result.stdout,
+          rawError: result.stderr,
+          durationMs,
+          startedAt,
+        };
+      }
+
+      // Review mode: read -o file for raw response (no schema enforcement)
+      if (mode === "review") {
+        let rawResponse = result.stdout;
+        try {
+          const outputContent = await fs.readFile(outputPath, "utf-8");
+          if (outputContent.trim()) rawResponse = outputContent;
+        } catch {
+          // Fall back to stdout
+        }
+        return {
+          agent: this.config.name,
+          status: "success",
+          suggestions: [],
+          rawOutput: rawResponse,
           rawError: result.stderr,
           durationMs,
           startedAt,

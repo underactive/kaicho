@@ -25,7 +25,7 @@ export interface RunResult {
   error?: string;
 }
 
-export type AgentMode = "scan" | "fix";
+export type AgentMode = "scan" | "fix" | "review";
 
 export interface AgentAdapter {
   readonly config: AgentConfig;

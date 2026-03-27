@@ -39,7 +39,7 @@ export class CursorAdapter implements AgentAdapter {
         args.push("--model", this.config.model);
       }
 
-      if (mode === "scan") {
+      if (mode === "scan" || mode === "review") {
         args.push("--mode", "plan"); // read-only: no file edits
       }
       // fix mode: default mode (no --mode plan), agent has write access
@@ -80,7 +80,7 @@ export class CursorAdapter implements AgentAdapter {
         };
       }
 
-      if (mode === "fix") {
+      if (mode === "fix" || mode === "review") {
         return {
           agent: this.config.name,
           status: "success",
