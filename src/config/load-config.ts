@@ -13,6 +13,7 @@ export interface KaichoConfig {
   minSeverity?: string;
   models?: Record<string, string>;
   reviewer?: string;
+  retention?: number;
 }
 
 /**
@@ -42,6 +43,7 @@ export async function loadConfig(repoPath: string): Promise<KaichoConfig> {
       minSeverity: typeof raw["minSeverity"] === "string" ? raw["minSeverity"] : undefined,
       models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
       reviewer: typeof raw["reviewer"] === "string" ? raw["reviewer"] : undefined,
+      retention: typeof raw["retention"] === "number" ? raw["retention"] : undefined,
     };
   } catch {
     log("warn", "Invalid config file, ignoring", { path: configPath });

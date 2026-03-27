@@ -10,6 +10,7 @@ const DEFAULT_CONFIG = {
   files: null,
   minSeverity: null,
   models: {},
+  retention: 3,
 };
 
 export const initCommand = new Command("init")

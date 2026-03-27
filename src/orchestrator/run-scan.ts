@@ -32,6 +32,7 @@ export interface ScanOptions {
   scope?: string;
   files?: string;
   models?: Record<string, string>;
+  retention?: number;
   onProgress?: (progress: ScanProgress) => void;
 }
 
@@ -205,6 +206,13 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
     } catch (err) {
       log("error", "Failed to save run result", { agent: result.agent, error: String(err) });
     }
+  }
+
+  // Prune old runs (default: keep 3 per agent+task)
+  try {
+    await store.prune(options.retention ?? 3);
+  } catch {
+    // Best effort
   }
 
   const clusters = clusterSuggestions(results);

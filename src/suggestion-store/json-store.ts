@@ -110,4 +110,56 @@ export class JsonStore {
 
     await fs.writeFile(filePath, content, "utf-8");
   }
+
+  /**
+   * Prune old run files, keeping the latest N per agent+task combination.
+   * Filenames are timestamp-sorted, so alphabetical order = chronological.
+   */
+  async prune(retention: number): Promise<number> {
+    let files: string[];
+    try {
+      files = (await fs.readdir(this.runsDir))
+        .filter((f) => f.endsWith(".json"))
+        .sort();
+    } catch {
+      return 0;
+    }
+
+    // Group by agent+task (extracted from filename: timestamp_agent_task.json)
+    const groups = new Map<string, string[]>();
+    for (const file of files) {
+      const parts = file.replace(".json", "").split("_");
+      const task = parts.pop();
+      const agent = parts.pop();
+      if (!agent || !task) continue;
+      const key = `${agent}_${task}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.push(file);
+      } else {
+        groups.set(key, [file]);
+      }
+    }
+
+    let removed = 0;
+    for (const [, groupFiles] of groups) {
+      if (groupFiles.length <= retention) continue;
+      // Remove oldest (first in sorted order), keep latest
+      const toRemove = groupFiles.slice(0, groupFiles.length - retention);
+      for (const file of toRemove) {
+        try {
+          await fs.unlink(path.join(this.runsDir, file));
+          removed++;
+        } catch {
+          // Best effort
+        }
+      }
+    }
+
+    if (removed > 0) {
+      log("info", "Pruned old runs", { removed, retention });
+    }
+
+    return removed;
+  }
 }

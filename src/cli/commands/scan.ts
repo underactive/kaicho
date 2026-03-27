@@ -70,6 +70,7 @@ export const scanCommand = new Command("scan")
       scope: merged.scope,
       files: merged.files,
       models: config.models,
+      retention: config.retention,
       onProgress,
     });
 
