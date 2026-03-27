@@ -12,6 +12,7 @@ import { JsonStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
+import { summarizeClusters } from "../summarizer/index.js";
 import { log } from "../logger/index.js";
 
 export interface ScanOptions {
@@ -167,6 +168,10 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
   }
 
   const clusters = clusterSuggestions(results);
+
+  // Auto-enrich with Ollama summaries (no-op if Ollama not running)
+  await summarizeClusters(clusters);
+
   const totalSuggestions = results.reduce((sum, r) => sum + r.suggestions.length, 0);
   const totalDurationMs = Date.now() - startMs;
 
