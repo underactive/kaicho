@@ -8,7 +8,7 @@ description or a task tool).
 
 | Plan | Goal | Owner | Started |
 |------|------|-------|---------|
-| (none) | — | — | — |
+| [fix-command](exec-plans/active/fix-command.md) | Apply scan suggestions via agents on isolated branches | — | 2026-03-26 |
 
 See [exec-plans/active/](exec-plans/active/) for full plan documents.
 
