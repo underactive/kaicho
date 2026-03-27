@@ -58,7 +58,8 @@ export class CodexAdapter implements AgentAdapter {
         );
         args.push(
           "-s", "read-only",
-          "--ephemeral",
+
+
           "--json",
           "-C", absRepoPath,
           "--output-schema", schemaPath,
@@ -67,7 +68,8 @@ export class CodexAdapter implements AgentAdapter {
       } else {
         args.push(
           "--full-auto",
-          "--ephemeral",
+
+
           "--json",
           "-C", absRepoPath,
         );
