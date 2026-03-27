@@ -6,6 +6,7 @@ import { Command } from "commander";
 import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
+import { applyEnrichedCache } from "./enrich.js";
 import { runFix, resolveFixBranch } from "../../orchestrator/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
@@ -22,6 +23,7 @@ export const fixCommand = new Command("fix")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--agent <agent>", "Agent to use for fixing (default: agent that found the issue)")
   .option("--cluster <n>", "Cluster number to fix (skip interactive picker)")
+  .option("--id <hash>", "Fix a specific finding by short ID")
   .option("--task <task>", "Filter scan results by task type")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "300000")
   .option("--min-severity <level>", "Minimum severity to show")
@@ -43,9 +45,16 @@ export const fixCommand = new Command("fix")
       process.exit(1);
     }
 
-    // Pick a cluster
+    // Pick a cluster by --id, --cluster, or interactive picker
     let clusterIdx: number;
-    if (opts.cluster !== undefined) {
+    if (opts.id) {
+      const idStr = opts.id as string;
+      clusterIdx = filtered.findIndex((c) => c.id === idStr);
+      if (clusterIdx === -1) {
+        process.stderr.write(`  No finding with ID "${idStr}". Run 'kaicho report' to see IDs.\n\n`);
+        process.exit(1);
+      }
+    } else if (opts.cluster !== undefined) {
       clusterIdx = parseInt(opts.cluster as string, 10) - 1;
       if (clusterIdx < 0 || clusterIdx >= filtered.length) {
         process.stderr.write(`  Invalid cluster number. Choose 1-${filtered.length}.\n\n`);
@@ -59,14 +68,23 @@ export const fixCommand = new Command("fix")
 
     const cluster = filtered[clusterIdx]!;
     const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
-    const agentName = opts.agent as string | undefined ?? cluster.agents[0] ?? "claude";
+
+    // Pick agent: CLI override > interactive choice for multi-agent > default
+    let agentName: string;
+    if (opts.agent) {
+      agentName = opts.agent as string;
+    } else if (cluster.agents.length > 1 && process.stdin.isTTY) {
+      agentName = await promptAgentChoice(cluster.agents);
+    } else {
+      agentName = cluster.agents[0] ?? "claude";
+    }
 
     process.stdout.write(`\n  Fixing ${color(`[${cluster.severity}]`, "\x1b[33m")} ${location} with ${color(agentName, "\x1b[1m")}...\n\n`);
 
     const result = await runFix({
       repoPath: rawRepo,
       cluster,
-      agent: opts.agent as string | undefined,
+      agent: agentName,
       timeoutMs: parseInt(opts.timeout as string, 10),
     });
 
@@ -115,8 +133,12 @@ function printClusterList(clusters: SuggestionCluster[]): void {
     const badge = c.agreement > 1 ? color(` ${c.agreement}x`, "\x1b[32m") : "";
     const sev = color(`[${c.severity}]`, "\x1b[33m");
     const agents = color(`(${c.agents.join(", ")})`, "\x1b[90m");
+    const idTag = color(c.id, "\x1b[90m");
 
-    out.write(`  ${String(i + 1).padStart(3)}. ${sev} ${c.category} — ${location}${badge} ${agents}\n`);
+    out.write(`  ${String(i + 1).padStart(3)}. ${idTag} ${sev} ${c.category} — ${location}${badge} ${agents}\n`);
+    if (c.summary) {
+      out.write(`       ${color(c.summary, "\x1b[37m")}\n`);
+    }
   }
 
   out.write("\n");
@@ -136,6 +158,26 @@ async function promptClusterChoice(max: number): Promise<number> {
       process.exit(1);
     }
     return idx;
+  } finally {
+    rl.close();
+  }
+}
+
+async function promptAgentChoice(agents: string[]): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+
+  try {
+    const options = agents.map((a, i) => `${i + 1}=${a}`).join(", ");
+    const answer = await rl.question(`  Multiple agents found this. Fix with? (${options}): `);
+    const idx = parseInt(answer.trim(), 10) - 1;
+    if (!isNaN(idx) && idx >= 0 && idx < agents.length) {
+      return agents[idx]!;
+    }
+    // Default to first agent if invalid input
+    return agents[0]!;
   } finally {
     rl.close();
   }
@@ -201,5 +243,7 @@ async function loadClusters(
     error: r.error,
   }));
 
-  return clusterSuggestions(results);
+  const clusters = clusterSuggestions(results);
+  await applyEnrichedCache(repoPath, clusters, task);
+  return clusters;
 }

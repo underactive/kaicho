@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
+import { applyEnrichedCache } from "./enrich.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
 import { formatMultiJson } from "../formatters/json.js";
 import type { RunResult } from "../../types/index.js";
@@ -88,6 +89,7 @@ export const reportCommand = new Command("report")
     }));
 
     let clusters = clusterSuggestions(results);
+    await applyEnrichedCache(absRepoPath, clusters, opts.task as string | undefined);
     if (opts.minSeverity) {
       clusters = filterBySeverity(clusters, opts.minSeverity as string);
     }

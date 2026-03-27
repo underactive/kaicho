@@ -20,6 +20,7 @@ export function formatJson(result: RunResult): void {
 export function formatMultiJson(multi: MultiScanResult): void {
   const output = {
     clusters: multi.clusters.map((c) => ({
+      id: c.id,
       file: c.file,
       line: c.line,
       category: c.category,
@@ -28,6 +29,7 @@ export function formatMultiJson(multi: MultiScanResult): void {
       agreement: c.agreement,
       rationales: c.rationales,
       suggestedChange: c.suggestedChange,
+      summary: c.summary ?? null,
     })),
     results: multi.results.map(formatSingleResult),
     totalFindings: multi.clusters.length,

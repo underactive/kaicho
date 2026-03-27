@@ -4,6 +4,7 @@ import type { SuggestionCluster } from "../dedup/index.js";
 
 function makeCluster(overrides: Partial<SuggestionCluster> = {}): SuggestionCluster {
   return {
+    id: "a1b2",
     file: "src/api.ts",
     line: 42,
     category: "security",

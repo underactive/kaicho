@@ -171,7 +171,13 @@ function formatCluster(
     ? color(` ${cluster.agreement}x`, "\x1b[32m")
     : "";
 
-  out.write(`  ${severityLabel(cluster.severity)} ${cluster.category} — ${location}${agreementBadge}\n`);
+  const idTag = color(cluster.id, "\x1b[90m");
+  out.write(`  ${idTag} ${severityLabel(cluster.severity)} ${cluster.category} — ${location}${agreementBadge}\n`);
+
+  if (cluster.summary) {
+    out.write(`  ${color("    " + cluster.summary, "\x1b[37m")}\n`);
+  }
+
   out.write(`  ${color("agents:", "\x1b[90m")} ${agentTags}\n`);
 
   for (const r of cluster.rationales) {

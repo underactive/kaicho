@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Suggestion, RunResult } from "../types/index.js";
 
 export interface AgentSuggestion {
@@ -6,6 +7,8 @@ export interface AgentSuggestion {
 }
 
 export interface SuggestionCluster {
+  /** Stable short ID derived from file + line + category (4-char hex) */
+  id: string;
   /** The canonical file for this cluster */
   file: string;
   /** Representative line (median of clustered lines, or null) */
@@ -22,8 +25,21 @@ export interface SuggestionCluster {
   rationales: Array<{ agent: string; rationale: string }>;
   /** Best suggested change (from highest-severity suggestion) */
   suggestedChange: string | null;
+  /** One-line summary from local LLM (populated by enrich) */
+  summary?: string;
   /** All individual suggestions in this cluster */
   items: AgentSuggestion[];
+}
+
+/**
+ * Generate a stable 4-char hex ID from file + line-bucket + category.
+ * Lines are bucketed to nearest 10 so the ID stays stable even when
+ * clustering produces slightly different median lines across runs.
+ */
+function generateClusterId(file: string, line: number | null, category: string): string {
+  const bucket = line !== null ? Math.round(line / 10) * 10 : "null";
+  const input = `${file}:${bucket}:${category}`;
+  return createHash("sha256").update(input).digest("hex").slice(0, 4);
 }
 
 const LINE_PROXIMITY = 5;
@@ -183,10 +199,14 @@ function buildCluster(file: string, items: AgentSuggestion[]): SuggestionCluster
     }
   }
 
+  const category = best.suggestion.category;
+  const id = generateClusterId(file, medianLine, category);
+
   return {
+    id,
     file,
     line: medianLine,
-    category: best.suggestion.category,
+    category,
     severity: best.suggestion.severity,
     agents,
     agreement: agents.length,

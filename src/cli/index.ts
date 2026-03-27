@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { enrichCommand } from "./commands/enrich.js";
 import { fixCommand } from "./commands/fix.js";
 import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
@@ -14,6 +15,7 @@ program
   .description("Run AI coding agents against repos and collect structured suggestions")
   .version("0.1.0");
 
+program.addCommand(enrichCommand);
 program.addCommand(fixCommand);
 program.addCommand(initCommand);
 program.addCommand(listCommand);
