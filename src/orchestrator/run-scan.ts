@@ -25,6 +25,8 @@ export interface ScanProgress {
 
 export interface ScanOptions {
   agent?: string;
+  agents?: string[];
+  exclude?: string[];
   task: string;
   repoPath: string;
   timeoutMs?: number;
@@ -159,9 +161,21 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
   }
 
   const prompt = buildPrompt(fileManifest);
-  const agentsToRun = agent && agent !== "all"
-    ? [agent]
-    : ALL_AGENT_NAMES;
+
+  // Agent selection: --agent (single) > --agents (list) > all minus --exclude
+  let agentsToRun: string[];
+  if (agent && agent !== "all") {
+    agentsToRun = [agent];
+  } else if (options.agents && options.agents.length > 0) {
+    agentsToRun = options.agents;
+  } else {
+    agentsToRun = ALL_AGENT_NAMES;
+  }
+
+  if (options.exclude && options.exclude.length > 0) {
+    const excludeSet = new Set(options.exclude);
+    agentsToRun = agentsToRun.filter((a) => !excludeSet.has(a));
+  }
 
   const startMs = Date.now();
 

@@ -9,7 +9,9 @@ import { formatMultiJson } from "../formatters/json.js";
 
 export const scanCommand = new Command("scan")
   .description("Run an agent scan against a repository")
-  .option("--agent <agent>", "Agent to use (omit for all available)")
+  .option("--agent <agent>", "Run a single agent")
+  .option("--agents <agents>", "Run specific agents (comma-separated, e.g. codex,cursor)")
+  .option("--exclude <agents>", "Exclude agents (comma-separated, e.g. gemini)")
   .option("--task <task>", "Task to run")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--timeout <ms>", "Agent timeout in milliseconds")
@@ -58,8 +60,13 @@ export const scanCommand = new Command("scan")
       }
     };
 
+    const agentsList = opts.agents ? (opts.agents as string).split(",").map((s: string) => s.trim()) : undefined;
+    const excludeList = opts.exclude ? (opts.exclude as string).split(",").map((s: string) => s.trim()) : undefined;
+
     const multiResult = await runScan({
       agent: merged.agent,
+      agents: agentsList,
+      exclude: excludeList,
       task: merged.task ?? "security",
       repoPath: rawRepo,
       timeoutMs: merged.timeout ? parseInt(String(merged.timeout), 10) : 300_000,
