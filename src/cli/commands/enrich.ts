@@ -14,7 +14,8 @@ function enrichedFileName(task?: string): string {
 }
 
 export interface EnrichedEntry {
-  /** Keyed by file path — stable across task types and clustering contexts */
+  /** Cluster ID — stable within the same task-scoped clustering context */
+  id: string;
   file: string;
   summary: string;
 }
@@ -155,14 +156,10 @@ async function saveEnrichedCache(
   model: string,
   task?: string,
 ): Promise<void> {
-  // Deduplicate by file (one summary per file, first one wins — highest priority cluster)
-  const seen = new Set<string>();
   const entries: EnrichedEntry[] = [];
   for (const c of clusters) {
     if (!c.summary) continue;
-    if (seen.has(c.file)) continue;
-    seen.add(c.file);
-    entries.push({ file: c.file, summary: c.summary });
+    entries.push({ id: c.id, file: c.file, summary: c.summary });
   }
 
   const enriched: EnrichedData = {
@@ -209,20 +206,19 @@ export async function applyEnrichedCache(
     return; // No cache
   }
 
-  const summaryMap = new Map<string, string>();
-  // Support both new format (entries) and old format (clusters) for backwards compat
+  const summaryById = new Map<string, string>();
   const rawEntries = (data.entries ?? (data as unknown as Record<string, unknown>)["clusters"] ?? []) as unknown as Array<Record<string, unknown>>;
   for (const entry of rawEntries) {
-    const file = entry["file"] as string | undefined;
+    const id = entry["id"] as string | undefined;
     const summary = entry["summary"] as string | undefined;
-    if (file && summary) {
-      summaryMap.set(file, summary);
+    if (id && summary) {
+      summaryById.set(id, summary);
     }
   }
 
   for (const cluster of clusters) {
     if (!cluster.summary) {
-      const cached = summaryMap.get(cluster.file);
+      const cached = summaryById.get(cluster.id);
       if (cached) {
         cluster.summary = cached;
       }
