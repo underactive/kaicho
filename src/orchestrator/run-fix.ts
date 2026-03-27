@@ -20,11 +20,19 @@ import {
 } from "../branch/index.js";
 import { log } from "../logger/index.js";
 
+export interface FixProgress {
+  step: "check-worktree" | "create-branch" | "check-agent" | "running-agent" | "capture-diff" | "commit" | "done";
+  agent?: string;
+  branch?: string;
+  detail?: string;
+}
+
 export interface FixOptions {
   repoPath: string;
   cluster: SuggestionCluster;
   agent?: string;
   timeoutMs?: number;
+  onProgress?: (progress: FixProgress) => void;
 }
 
 export interface FixResult {
@@ -75,9 +83,11 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
   const absRepoPath = path.resolve(expanded);
 
   const agentName = pickAgent(cluster, options.agent);
+  const notify = options.onProgress ?? (() => {});
   const startMs = Date.now();
 
   // Check for clean working tree
+  notify({ step: "check-worktree" });
   try {
     await ensureCleanWorkTree(absRepoPath);
   } catch (err) {
@@ -94,9 +104,11 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
   }
 
   // Create fix branch
+  notify({ step: "create-branch", agent: agentName });
   const { branch, previousBranch } = await createFixBranch(absRepoPath);
 
   try {
+    notify({ step: "check-agent", agent: agentName, branch });
     const adapter = resolveAdapter(agentName, timeoutMs);
 
     const available = await adapter.isAvailable();
@@ -116,6 +128,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
 
     const prompt = buildFixPrompt(cluster);
     log("info", "Running fix", { agent: agentName, branch, cluster: `${cluster.file}:${cluster.line}` });
+    notify({ step: "running-agent", agent: agentName, branch, detail: `${cluster.file}:${cluster.line}` });
 
     const result = await adapter.run(absRepoPath, prompt, "fix");
 
@@ -134,6 +147,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
     }
 
     // Capture what changed
+    notify({ step: "capture-diff", agent: agentName, branch });
     const { diff, filesChanged } = await captureDiff(absRepoPath, previousBranch);
 
     if (filesChanged === 0) {
@@ -150,11 +164,14 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
     }
 
     // Commit the fix
+    notify({ step: "commit", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"}` });
     const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
     await commitFix(
       absRepoPath,
       `fix: ${cluster.category} issue in ${location}\n\nApplied by kaicho fix via ${agentName}`,
     );
+
+    notify({ step: "done", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"} changed` });
 
     return {
       status: "applied",

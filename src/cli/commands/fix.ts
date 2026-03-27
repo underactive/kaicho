@@ -7,7 +7,7 @@ import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { applyEnrichedCache } from "./enrich.js";
-import { runFix, resolveFixBranch } from "../../orchestrator/index.js";
+import { runFix, resolveFixBranch, type FixProgress } from "../../orchestrator/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
 
@@ -81,11 +81,33 @@ export const fixCommand = new Command("fix")
 
     process.stdout.write(`\n  Fixing ${color(`[${cluster.severity}]`, "\x1b[33m")} ${location} with ${color(agentName, "\x1b[1m")}...\n\n`);
 
+    const isTTY = process.stderr.isTTY;
+    const STEP_LABELS: Record<string, string> = {
+      "check-worktree": "Checking working tree...",
+      "create-branch": "Creating fix branch...",
+      "check-agent": "Checking agent availability...",
+      "running-agent": "Agent is working...",
+      "capture-diff": "Capturing changes...",
+      "commit": "Committing fix...",
+      "done": "Done.",
+    };
+
+    const onProgress = (p: FixProgress): void => {
+      if (isTTY) {
+        const label = STEP_LABELS[p.step] ?? p.step;
+        process.stderr.write(`\r  ${color(label, "\x1b[90m")}${"".padEnd(30)}`);
+        if (p.step === "done") process.stderr.write("\n");
+      } else {
+        process.stderr.write(JSON.stringify({ type: "fix.progress", ...p }) + "\n");
+      }
+    };
+
     const result = await runFix({
       repoPath: rawRepo,
       cluster,
       agent: agentName,
       timeoutMs: parseInt(opts.timeout as string, 10),
+      onProgress,
     });
 
     if (result.status === "dirty-worktree") {
