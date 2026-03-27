@@ -35,6 +35,10 @@ export class CursorAdapter implements AgentAdapter {
         "--trust",
       ];
 
+      if (this.config.model) {
+        args.push("--model", this.config.model);
+      }
+
       if (mode === "scan") {
         args.push("--mode", "plan"); // read-only: no file edits
       }

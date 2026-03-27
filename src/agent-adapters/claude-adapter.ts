@@ -36,6 +36,10 @@ export class ClaudeAdapter implements AgentAdapter {
         "--no-session-persistence",
       ];
 
+      if (this.config.model) {
+        args.push("--model", this.config.model);
+      }
+
       if (mode === "scan") {
         args.push("--json-schema", JSON.stringify(SUGGESTIONS_JSON_SCHEMA));
         args.push("--permission-mode", "plan");

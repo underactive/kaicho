@@ -65,6 +65,7 @@ export const scanCommand = new Command("scan")
       timeoutMs: merged.timeout ? parseInt(String(merged.timeout), 10) : 300_000,
       scope: merged.scope,
       files: merged.files,
+      models: config.models,
       onProgress,
     });
 

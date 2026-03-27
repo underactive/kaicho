@@ -61,6 +61,7 @@ export interface BatchFixOptions {
   clusters: SuggestionCluster[];
   agent?: string;
   timeoutMs?: number;
+  models?: Record<string, string>;
   auto?: boolean;
   onProgress?: (progress: BatchFixProgress) => void;
   onConfirm?: (
@@ -73,17 +74,21 @@ export interface BatchFixOptions {
 
 const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
 
-function resolveAdapter(agent: string, timeoutMs?: number): AgentAdapter {
-  const opts = timeoutMs ? { timeoutMs } : undefined;
+function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
+  const opts: Partial<import("../types/index.js").AgentConfig> = {};
+  if (timeoutMs) opts.timeoutMs = timeoutMs;
+  if (model) opts.model = model;
+  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
+
   switch (agent) {
     case "claude":
-      return new ClaudeAdapter(opts);
+      return new ClaudeAdapter(hasOpts);
     case "codex":
-      return new CodexAdapter(opts);
+      return new CodexAdapter(hasOpts);
     case "cursor":
-      return new CursorAdapter(opts);
+      return new CursorAdapter(hasOpts);
     case "gemini":
-      return new GeminiAdapter(opts);
+      return new GeminiAdapter(hasOpts);
     default:
       throw new Error(
         `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
@@ -131,7 +136,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
         agent: agentName,
       });
 
-      const adapter = resolveAdapter(agentName, timeoutMs);
+      const adapter = resolveAdapter(agentName, timeoutMs, options.models?.[agentName]);
       const available = await adapter.isAvailable();
 
       if (!available) {

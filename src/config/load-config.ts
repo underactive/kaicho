@@ -11,6 +11,7 @@ export interface KaichoConfig {
   scope?: string;
   files?: string;
   minSeverity?: string;
+  models?: Record<string, string>;
 }
 
 /**
@@ -38,11 +39,17 @@ export async function loadConfig(repoPath: string): Promise<KaichoConfig> {
       scope: typeof raw["scope"] === "string" ? raw["scope"] : undefined,
       files: typeof raw["files"] === "string" ? raw["files"] : undefined,
       minSeverity: typeof raw["minSeverity"] === "string" ? raw["minSeverity"] : undefined,
+      models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
     };
   } catch {
     log("warn", "Invalid config file, ignoring", { path: configPath });
     return {};
   }
+}
+
+function isModelsMap(val: unknown): val is Record<string, string> {
+  if (typeof val !== "object" || val === null || Array.isArray(val)) return false;
+  return Object.values(val as Record<string, unknown>).every((v) => typeof v === "string");
 }
 
 /**

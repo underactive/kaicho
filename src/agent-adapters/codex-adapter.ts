@@ -50,6 +50,10 @@ export class CodexAdapter implements AgentAdapter {
     try {
       const args: string[] = ["exec"];
 
+      if (this.config.model) {
+        args.push("-m", this.config.model);
+      }
+
       if (mode === "scan") {
         await fs.writeFile(
           schemaPath,

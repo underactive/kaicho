@@ -34,6 +34,10 @@ export class GeminiAdapter implements AgentAdapter {
         "-o", "json",
       ];
 
+      if (this.config.model) {
+        args.push("-m", this.config.model);
+      }
+
       if (mode === "scan") {
         args.push("--sandbox");
       } else {

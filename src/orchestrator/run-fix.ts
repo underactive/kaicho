@@ -34,6 +34,7 @@ export interface FixOptions {
   cluster: SuggestionCluster;
   agent?: string;
   timeoutMs?: number;
+  model?: string;
   onProgress?: (progress: FixProgress) => void;
 }
 
@@ -50,17 +51,21 @@ export interface FixResult {
 
 const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
 
-function resolveAdapter(agent: string, timeoutMs?: number): AgentAdapter {
-  const opts = timeoutMs ? { timeoutMs } : undefined;
+function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
+  const opts: Partial<import("../types/index.js").AgentConfig> = {};
+  if (timeoutMs) opts.timeoutMs = timeoutMs;
+  if (model) opts.model = model;
+  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
+
   switch (agent) {
     case "claude":
-      return new ClaudeAdapter(opts);
+      return new ClaudeAdapter(hasOpts);
     case "codex":
-      return new CodexAdapter(opts);
+      return new CodexAdapter(hasOpts);
     case "cursor":
-      return new CursorAdapter(opts);
+      return new CursorAdapter(hasOpts);
     case "gemini":
-      return new GeminiAdapter(opts);
+      return new GeminiAdapter(hasOpts);
     default:
       throw new Error(
         `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
@@ -111,7 +116,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
 
   try {
     notify({ step: "check-agent", agent: agentName, branch });
-    const adapter = resolveAdapter(agentName, timeoutMs);
+    const adapter = resolveAdapter(agentName, timeoutMs, options.model);
 
     const available = await adapter.isAvailable();
     if (!available) {

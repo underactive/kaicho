@@ -4,6 +4,7 @@ export interface AgentConfig {
   name: string;
   command: string;
   timeoutMs: number;
+  model?: string;
 }
 
 export type RunStatus =

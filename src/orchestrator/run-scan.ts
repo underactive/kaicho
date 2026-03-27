@@ -30,6 +30,7 @@ export interface ScanOptions {
   timeoutMs?: number;
   scope?: string;
   files?: string;
+  models?: Record<string, string>;
   onProgress?: (progress: ScanProgress) => void;
 }
 
@@ -48,17 +49,21 @@ const TASK_PROMPTS: Record<string, (fileManifest?: string) => string> = {
 
 const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
 
-function resolveAdapter(agent: string, timeoutMs?: number): AgentAdapter {
-  const opts = timeoutMs ? { timeoutMs } : undefined;
+function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
+  const opts: Partial<import("../types/index.js").AgentConfig> = {};
+  if (timeoutMs) opts.timeoutMs = timeoutMs;
+  if (model) opts.model = model;
+  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
+
   switch (agent) {
     case "claude":
-      return new ClaudeAdapter(opts);
+      return new ClaudeAdapter(hasOpts);
     case "codex":
-      return new CodexAdapter(opts);
+      return new CodexAdapter(hasOpts);
     case "cursor":
-      return new CursorAdapter(opts);
+      return new CursorAdapter(hasOpts);
     case "gemini":
-      return new GeminiAdapter(opts);
+      return new GeminiAdapter(hasOpts);
     default:
       throw new Error(
         `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
@@ -74,9 +79,10 @@ async function runSingleAgent(
   prompt: string,
   absRepoPath: string,
   timeoutMs?: number,
+  model?: string,
   onProgress?: (progress: ScanProgress) => void,
 ): Promise<RunResult> {
-  const adapter = resolveAdapter(agent, timeoutMs);
+  const adapter = resolveAdapter(agent, timeoutMs, model);
 
   const available = await adapter.isAvailable();
   if (!available) {
@@ -161,7 +167,7 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
 
   // Run all agents in parallel
   const settled = await Promise.allSettled(
-    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs, options.onProgress)),
+    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs, options.models?.[a], options.onProgress)),
   );
 
   const results: RunResult[] = settled.map((s, i) => {

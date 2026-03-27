@@ -5,10 +5,11 @@ import { Command } from "commander";
 
 const DEFAULT_CONFIG = {
   task: "security",
-  timeout: 300000,
+  timeout: 600000,
   scope: null,
   files: null,
   minSeverity: null,
+  models: {},
 };
 
 export const initCommand = new Command("init")
