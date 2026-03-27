@@ -9,6 +9,7 @@ export {
 
 export {
   type AgentConfig,
+  type AgentMode,
   type RunStatus,
   type RunResult,
   type AgentAdapter,

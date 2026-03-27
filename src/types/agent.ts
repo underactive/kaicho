@@ -24,6 +24,8 @@ export interface RunResult {
   error?: string;
 }
 
+export type AgentMode = "scan" | "fix";
+
 export interface AgentAdapter {
   readonly config: AgentConfig;
 
@@ -35,6 +37,8 @@ export interface AgentAdapter {
   /**
    * Execute the agent against a target repo with a given prompt.
    * MUST NOT throw — always returns a RunResult.
+   *
+   * @param mode "scan" = read-only (default), "fix" = write access
    */
-  run(repoPath: string, prompt: string): Promise<RunResult>;
+  run(repoPath: string, prompt: string, mode?: AgentMode): Promise<RunResult>;
 }

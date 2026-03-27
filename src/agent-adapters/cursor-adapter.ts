@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import type { AgentAdapter, AgentConfig, RunResult } from "../types/index.js";
+import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
 import { parseFromText } from "../output-parser/index.js";
 import { log } from "../logger/index.js";
 
@@ -24,7 +24,7 @@ export class CursorAdapter implements AgentAdapter {
     }
   }
 
-  async run(repoPath: string, prompt: string): Promise<RunResult> {
+  async run(repoPath: string, prompt: string, mode: AgentMode = "scan"): Promise<RunResult> {
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
 
@@ -33,8 +33,12 @@ export class CursorAdapter implements AgentAdapter {
         "-p", prompt,
         "--output-format", "json",
         "--trust",
-        "--mode", "plan", // read-only: no file edits
       ];
+
+      if (mode === "scan") {
+        args.push("--mode", "plan"); // read-only: no file edits
+      }
+      // fix mode: default mode (no --mode plan), agent has write access
 
       log("info", "Starting Cursor agent", { repoPath });
 
@@ -69,6 +73,18 @@ export class CursorAdapter implements AgentAdapter {
           durationMs,
           startedAt,
           error: `Agent exited with code ${result.exitCode}: ${result.stderr.slice(0, 500)}`,
+        };
+      }
+
+      if (mode === "fix") {
+        return {
+          agent: this.config.name,
+          status: "success",
+          suggestions: [],
+          rawOutput: result.stdout,
+          rawError: result.stderr,
+          durationMs,
+          startedAt,
         };
       }
 

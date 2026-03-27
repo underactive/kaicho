@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { execa } from "execa";
-import type { AgentAdapter, AgentConfig, RunResult } from "../types/index.js";
+import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
 import { parseFromFile, parseFromJsonl } from "../output-parser/index.js";
 import { SUGGESTIONS_JSON_SCHEMA } from "../prompts/index.js";
 import { log } from "../logger/index.js";
@@ -37,7 +37,7 @@ export class CodexAdapter implements AgentAdapter {
     }
   }
 
-  async run(repoPath: string, prompt: string): Promise<RunResult> {
+  async run(repoPath: string, prompt: string, mode: AgentMode = "scan"): Promise<RunResult> {
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
     const absRepoPath = path.resolve(repoPath);
@@ -48,21 +48,30 @@ export class CodexAdapter implements AgentAdapter {
     const outputPath = path.join(tmpDir, "output.json");
 
     try {
-      await fs.writeFile(
-        schemaPath,
-        JSON.stringify(SUGGESTIONS_JSON_SCHEMA),
-        "utf-8",
-      );
+      const args: string[] = ["exec"];
 
-      const args = [
-        "exec",
-        "-s", "read-only",
-        "--ephemeral",
-        "--json",
-        "-C", absRepoPath,
-        "--output-schema", schemaPath,
-        "-o", outputPath,
-      ];
+      if (mode === "scan") {
+        await fs.writeFile(
+          schemaPath,
+          JSON.stringify(SUGGESTIONS_JSON_SCHEMA),
+          "utf-8",
+        );
+        args.push(
+          "-s", "read-only",
+          "--ephemeral",
+          "--json",
+          "-C", absRepoPath,
+          "--output-schema", schemaPath,
+          "-o", outputPath,
+        );
+      } else {
+        args.push(
+          "--full-auto",
+          "--ephemeral",
+          "--json",
+          "-C", absRepoPath,
+        );
+      }
 
       if (!(await isGitRepo(absRepoPath))) {
         args.push("--skip-git-repo-check");
@@ -102,6 +111,19 @@ export class CodexAdapter implements AgentAdapter {
           durationMs,
           startedAt,
           error: `Agent exited with code ${result.exitCode}: ${result.stderr.slice(0, 500)}`,
+        };
+      }
+
+      // Fix mode: no structured output to parse
+      if (mode === "fix") {
+        return {
+          agent: this.config.name,
+          status: "success",
+          suggestions: [],
+          rawOutput: result.stdout,
+          rawError: result.stderr,
+          durationMs,
+          startedAt,
         };
       }
 

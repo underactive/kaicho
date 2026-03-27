@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import type { AgentAdapter, AgentConfig, RunResult } from "../types/index.js";
+import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
 import { parseFromFile } from "../output-parser/index.js";
 import { SUGGESTIONS_JSON_SCHEMA } from "../prompts/index.js";
 import { log } from "../logger/index.js";
@@ -25,18 +25,23 @@ export class ClaudeAdapter implements AgentAdapter {
     }
   }
 
-  async run(repoPath: string, prompt: string): Promise<RunResult> {
+  async run(repoPath: string, prompt: string, mode: AgentMode = "scan"): Promise<RunResult> {
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
 
     try {
-      const args = [
+      const args: string[] = [
         "-p", prompt,
         "--output-format", "json",
-        "--json-schema", JSON.stringify(SUGGESTIONS_JSON_SCHEMA),
         "--no-session-persistence",
-        "--permission-mode", "plan",
       ];
+
+      if (mode === "scan") {
+        args.push("--json-schema", JSON.stringify(SUGGESTIONS_JSON_SCHEMA));
+        args.push("--permission-mode", "plan");
+      } else {
+        args.push("--permission-mode", "acceptEdits");
+      }
 
       log("info", "Starting Claude agent", { repoPath });
 
@@ -71,6 +76,19 @@ export class ClaudeAdapter implements AgentAdapter {
           durationMs,
           startedAt,
           error: `Agent exited with code ${result.exitCode}: ${result.stderr.slice(0, 500)}`,
+        };
+      }
+
+      // Fix mode: no structured output to parse, success = agent ran without error
+      if (mode === "fix") {
+        return {
+          agent: this.config.name,
+          status: "success",
+          suggestions: [],
+          rawOutput: result.stdout,
+          rawError: result.stderr,
+          durationMs,
+          startedAt,
         };
       }
 

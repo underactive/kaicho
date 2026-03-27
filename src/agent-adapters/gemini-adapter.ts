@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import type { AgentAdapter, AgentConfig, RunResult } from "../types/index.js";
+import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
 import { parseFromText } from "../output-parser/index.js";
 import { log } from "../logger/index.js";
 
@@ -24,7 +24,7 @@ export class GeminiAdapter implements AgentAdapter {
     }
   }
 
-  async run(repoPath: string, prompt: string): Promise<RunResult> {
+  async run(repoPath: string, prompt: string, mode: AgentMode = "scan"): Promise<RunResult> {
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
 
@@ -32,8 +32,13 @@ export class GeminiAdapter implements AgentAdapter {
       const args = [
         "-p", prompt,
         "-o", "json",
-        "--sandbox",
       ];
+
+      if (mode === "scan") {
+        args.push("--sandbox");
+      } else {
+        args.push("--approval-mode", "auto_edit");
+      }
 
       log("info", "Starting Gemini agent", { repoPath });
 
@@ -68,6 +73,18 @@ export class GeminiAdapter implements AgentAdapter {
           durationMs,
           startedAt,
           error: `Agent exited with code ${result.exitCode}: ${result.stderr.slice(0, 500)}`,
+        };
+      }
+
+      if (mode === "fix") {
+        return {
+          agent: this.config.name,
+          status: "success",
+          suggestions: [],
+          rawOutput: result.stdout,
+          rawError: result.stderr,
+          durationMs,
+          startedAt,
         };
       }
 
