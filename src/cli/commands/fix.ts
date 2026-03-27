@@ -413,7 +413,8 @@ async function handleBatchFix(
       onProgress: (p) => {
         if (isTTY) {
           if (p.step === "starting") {
-            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${p.file} — starting with ${p.agent}...\n`);
+            const summaryLine = p.summary ? `\n       ${color(p.summary, "\x1b[37m")}` : "";
+            out.write(`  ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${p.file} — starting with ${p.agent}...${summaryLine}\n`);
           } else if (p.step === "running-agent") {
             // already printed "starting"
           } else if (p.step === "applied") {

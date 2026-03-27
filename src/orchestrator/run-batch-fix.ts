@@ -48,6 +48,7 @@ export interface BatchFixProgress {
   agent?: string;
   filesChanged?: number;
   error?: string;
+  summary?: string;
 }
 
 export type BatchFixAction = "continue" | "skip" | "stop";
@@ -134,6 +135,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
         file: cluster.file,
         step: "starting",
         agent: agentName,
+        summary: cluster.summary ?? undefined,
       });
 
       const adapter = resolveAdapter(agentName, timeoutMs, options.models?.[agentName], options.verbose);
