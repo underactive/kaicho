@@ -9,9 +9,8 @@ import { formatMultiJson } from "../formatters/json.js";
 
 export const scanCommand = new Command("scan")
   .description("Run an agent scan against a repository")
-  .option("--agent <agent>", "Run a single agent")
-  .option("--agents <agents>", "Run specific agents (comma-separated, e.g. codex,cursor)")
-  .option("--exclude <agents>", "Exclude agents (comma-separated, e.g. gemini)")
+  .option("--agents <agents>", "Agents to run (comma-separated, default: all available)")
+  .option("--exclude <agents>", "Exclude agents (comma-separated)")
   .option("--task <task>", "Task to run")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--timeout <ms>", "Agent timeout in milliseconds")
@@ -31,7 +30,6 @@ export const scanCommand = new Command("scan")
     // Load config, then merge (CLI flags override config)
     const config = await loadConfig(repoPath);
     const merged = mergeWithConfig({
-      agent: opts.agent as string | undefined,
       task: opts.task as string | undefined,
       timeout: opts.timeout as string | undefined,
       scope: opts.scope as string | undefined,
@@ -64,7 +62,6 @@ export const scanCommand = new Command("scan")
     const excludeList = opts.exclude ? (opts.exclude as string).split(",").map((s: string) => s.trim()) : undefined;
 
     const multiResult = await runScan({
-      agent: merged.agent,
       agents: agentsList,
       exclude: excludeList,
       task: merged.task ?? "security",

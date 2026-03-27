@@ -57,15 +57,29 @@ describe("runScan", () => {
     expect(result.results.map((r) => r.agent)).toEqual(["claude", "codex", "cursor", "gemini"]);
   });
 
-  it("runs single agent when specified", async () => {
+  it("runs specific agents when --agents specified", async () => {
     const result = await runScan({
-      agent: "codex",
+      agents: ["codex"],
       task: "security",
       repoPath: "/test/repo",
     });
 
     expect(result.results).toHaveLength(1);
     expect(result.results[0]?.agent).toBe("codex");
+  });
+
+  it("excludes agents with --exclude", async () => {
+    const result = await runScan({
+      exclude: ["claude", "gemini"],
+      task: "security",
+      repoPath: "/test/repo",
+    });
+
+    expect(result.results).toHaveLength(2);
+    const agents = result.results.map((r) => r.agent);
+    expect(agents).toContain("codex");
+    expect(agents).toContain("cursor");
+    expect(agents).not.toContain("claude");
   });
 
   it("returns error for unknown task", async () => {

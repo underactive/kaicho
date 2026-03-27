@@ -24,7 +24,6 @@ export interface ScanProgress {
 }
 
 export interface ScanOptions {
-  agent?: string;
   agents?: string[];
   exclude?: string[];
   task: string;
@@ -119,12 +118,12 @@ async function runSingleAgent(
 }
 
 /**
- * Run a scan with one or all agents.
- * - If `agent` is specified, runs only that agent (returns single-element array).
- * - If `agent` is omitted or "all", runs all available agents in parallel.
+ * Run a scan with selected agents.
+ * - `agents` selects specific agents. Omit for all available.
+ * - `exclude` removes agents from the list.
  */
 export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
-  const { agent, task, repoPath, timeoutMs } = options;
+  const { task, repoPath, timeoutMs } = options;
   const expanded = repoPath.startsWith("~")
     ? path.join(os.homedir(), repoPath.slice(1))
     : repoPath;
@@ -134,7 +133,7 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
   if (!buildPrompt) {
     return {
       results: [{
-        agent: agent ?? "all",
+        agent: "all",
         status: "agent-error",
         suggestions: [],
         rawOutput: "",
@@ -162,11 +161,9 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
 
   const prompt = buildPrompt(fileManifest);
 
-  // Agent selection: --agent (single) > --agents (list) > all minus --exclude
+  // Agent selection: --agents (list) > all, then apply --exclude
   let agentsToRun: string[];
-  if (agent && agent !== "all") {
-    agentsToRun = [agent];
-  } else if (options.agents && options.agents.length > 0) {
+  if (options.agents && options.agents.length > 0) {
     agentsToRun = options.agents;
   } else {
     agentsToRun = ALL_AGENT_NAMES;
