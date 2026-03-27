@@ -33,6 +33,7 @@ export interface ScanOptions {
   files?: string;
   models?: Record<string, string>;
   retention?: number;
+  summarizerModel?: string;
   onProgress?: (progress: ScanProgress) => void;
 }
 
@@ -218,7 +219,9 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
   const clusters = clusterSuggestions(results);
 
   // Auto-enrich with Ollama summaries (no-op if Ollama not running)
-  const enriched = await summarizeClusters(clusters);
+  const enriched = await summarizeClusters(clusters, {
+    model: options.summarizerModel,
+  });
   if (enriched > 0) {
     await saveEnrichedCache(absRepoPath, clusters, task);
   }

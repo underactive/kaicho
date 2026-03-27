@@ -4,7 +4,7 @@ import { KAICHO_DIR } from "../config/index.js";
 import { log } from "../logger/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
-const DEFAULT_MODEL = "qwen3:1.7b";
+const DEFAULT_MODEL = "gemma3:1b";
 const DEFAULT_URL = "http://localhost:11434";
 
 export interface SummarizerProgress {

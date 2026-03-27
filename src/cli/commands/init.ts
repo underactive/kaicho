@@ -11,6 +11,7 @@ const DEFAULT_CONFIG = {
   minSeverity: null,
   models: {},
   retention: 3,
+  summarizerModel: "gemma3:1b",
 };
 
 export const initCommand = new Command("init")

@@ -45,6 +45,10 @@
       "type": "integer",
       "minimum": 1,
       "description": "Number of scan runs to keep per agent+task (default: 3). Older runs are pruned automatically."
+    },
+    "summarizerModel": {
+      "type": "string",
+      "description": "Ollama model for LLM summaries (default: gemma3:1b)"
     }
   },
   "additionalProperties": false

@@ -23,7 +23,7 @@ Requires Node.js >= 20 and at least one of:
 - [Cursor Agent](https://cursor.com/cli) (`agent`)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`gemini`)
 
-Optional: [Ollama](https://ollama.ai) with `qwen3:1.7b` for local LLM summaries.
+Optional: [Ollama](https://ollama.ai) with `gemma3:1b` for local LLM summaries.
 
 Check what you have installed:
 
@@ -139,7 +139,8 @@ Create `kaicho.config.json` in your repo root (or run `kaicho init`):
     "gemini": "gemini-2.5-pro"
   },
   "reviewer": "claude",
-  "retention": 3
+  "retention": 3,
+  "summarizerModel": "gemma3:1b"
 }
 ```
 

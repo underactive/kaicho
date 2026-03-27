@@ -30,7 +30,7 @@ export const enrichCommand = new Command("enrich")
   .description("Generate short IDs and LLM summaries for scan findings")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--task <task>", "Filter scan results by task type")
-  .option("--model <model>", "Ollama model for summaries", "qwen3:1.7b")
+  .option("--model <model>", "Ollama model for summaries", "gemma3:1b")
   .option("--force", "Regenerate even if cache exists")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;

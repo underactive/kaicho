@@ -71,6 +71,7 @@ export const scanCommand = new Command("scan")
       files: merged.files,
       models: config.models,
       retention: config.retention,
+      summarizerModel: config.summarizerModel,
       onProgress,
     });
 

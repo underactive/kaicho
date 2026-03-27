@@ -14,6 +14,7 @@ export interface KaichoConfig {
   models?: Record<string, string>;
   reviewer?: string;
   retention?: number;
+  summarizerModel?: string;
 }
 
 /**
@@ -44,6 +45,7 @@ export async function loadConfig(repoPath: string): Promise<KaichoConfig> {
       models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
       reviewer: typeof raw["reviewer"] === "string" ? raw["reviewer"] : undefined,
       retention: typeof raw["retention"] === "number" ? raw["retention"] : undefined,
+      summarizerModel: typeof raw["summarizerModel"] === "string" ? raw["summarizerModel"] : undefined,
     };
   } catch {
     log("warn", "Invalid config file, ignoring", { path: configPath });
