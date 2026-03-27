@@ -192,8 +192,13 @@ function mergeSimilarClusters(clusters: SuggestionCluster[]): SuggestionCluster[
 
   const result: SuggestionCluster[] = [];
 
-  for (const [, fileClusters] of byFile) {
-    // Group by fingerprint within the file
+  for (const [file, fileClusters] of byFile) {
+    if (fileClusters.length <= 1) {
+      result.push(...fileClusters);
+      continue;
+    }
+
+    // Pass 1: exact fingerprint merge
     const byFingerprint = new Map<string, SuggestionCluster[]>();
     for (const c of fileClusters) {
       const fp = rationaleFingerprint(c);
@@ -205,14 +210,65 @@ function mergeSimilarClusters(clusters: SuggestionCluster[]): SuggestionCluster[
       }
     }
 
+    const afterFingerprint: SuggestionCluster[] = [];
     for (const [, group] of byFingerprint) {
       if (group.length === 1) {
-        result.push(group[0]!);
+        afterFingerprint.push(group[0]!);
       } else {
-        // Merge all items from duplicate clusters into one
         const allItems = group.flatMap((c) => c.items);
-        result.push(buildCluster(group[0]!.file, allItems));
+        afterFingerprint.push(buildCluster(file, allItems));
       }
+    }
+
+    if (afterFingerprint.length <= 1) {
+      result.push(...afterFingerprint);
+      continue;
+    }
+
+    // Pass 2: Jaccard keyword similarity merge for remaining same-category clusters
+    const merged = mergeByKeywordSimilarity(file, afterFingerprint);
+    result.push(...merged);
+  }
+
+  return result;
+}
+
+/**
+ * Greedily merge clusters on the same file that share enough keywords.
+ * Only merges clusters with the same category.
+ */
+function mergeByKeywordSimilarity(
+  file: string,
+  clusters: SuggestionCluster[],
+): SuggestionCluster[] {
+  const used = new Set<number>();
+  const result: SuggestionCluster[] = [];
+
+  // Pre-compute keyword sets
+  const keywords = clusters.map(rationaleKeywords);
+
+  for (let i = 0; i < clusters.length; i++) {
+    if (used.has(i)) continue;
+
+    const group = [clusters[i]!];
+    used.add(i);
+
+    for (let j = i + 1; j < clusters.length; j++) {
+      if (used.has(j)) continue;
+      if (clusters[i]!.category !== clusters[j]!.category) continue;
+
+      const sim = keywordSimilarity(keywords[i]!, keywords[j]!);
+      if (sim >= SIMILARITY_THRESHOLD) {
+        group.push(clusters[j]!);
+        used.add(j);
+      }
+    }
+
+    if (group.length === 1) {
+      result.push(group[0]!);
+    } else {
+      const allItems = group.flatMap((c) => c.items);
+      result.push(buildCluster(file, allItems));
     }
   }
 
@@ -220,25 +276,53 @@ function mergeSimilarClusters(clusters: SuggestionCluster[]): SuggestionCluster[
 }
 
 /**
- * Extract a normalized fingerprint from a cluster's rationale.
- * Strips common filler words and takes the first 8 significant words.
- * Two clusters about the same issue will share a fingerprint even if
- * the exact wording differs slightly across agents.
+ * Extract a normalized keyword set from a cluster's rationale.
+ * Uses ALL rationales (not just the first), extracts significant words,
+ * and returns a sorted set. Two clusters about the same issue will
+ * share enough keywords to be detected as similar.
+ */
+function rationaleKeywords(cluster: SuggestionCluster): Set<string> {
+  const allText = cluster.rationales.map((r) => r.rationale).join(" ");
+
+  return new Set(
+    allText
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 4), // skip short/filler words
+  );
+}
+
+/**
+ * Compute a fingerprint for exact-match grouping (fast first pass).
+ * Uses file + category + first 6 significant words from the primary rationale.
  */
 function rationaleFingerprint(cluster: SuggestionCluster): string {
-  // Use the first rationale (highest-severity agent)
   const text = cluster.rationales[0]?.rationale ?? "";
-
-  // Normalize: lowercase, strip punctuation, split into words
   const words = text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, "")
     .split(/\s+/)
-    .filter((w) => w.length > 3) // skip short filler words
-    .slice(0, 8);
+    .filter((w) => w.length > 4)
+    .slice(0, 6);
 
   return `${cluster.file}:${cluster.category}:${words.join(" ")}`;
 }
+
+/**
+ * Compute Jaccard similarity between two keyword sets.
+ * Returns 0-1 where 1 means identical.
+ */
+function keywordSimilarity(a: Set<string>, b: Set<string>): number {
+  let intersection = 0;
+  for (const word of a) {
+    if (b.has(word)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+const SIMILARITY_THRESHOLD = 0.35;
 
 function buildCluster(file: string, items: AgentSuggestion[]): SuggestionCluster {
   // Unique agents
