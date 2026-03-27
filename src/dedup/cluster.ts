@@ -39,7 +39,7 @@ export interface SuggestionCluster {
 function generateClusterId(file: string, line: number | null, category: string): string {
   const bucket = line !== null ? Math.round(line / 10) * 10 : "null";
   const input = `${file}:${bucket}:${category}`;
-  return createHash("sha256").update(input).digest("hex").slice(0, 4);
+  return createHash("sha256").update(input).digest("hex").slice(0, 6);
 }
 
 const LINE_PROXIMITY = 5;
