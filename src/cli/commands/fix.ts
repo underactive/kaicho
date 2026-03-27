@@ -7,6 +7,7 @@ import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { applyEnrichedCache } from "./enrich.js";
+import { getFixedClusterIds } from "../../fix-log/index.js";
 import { runFix, resolveFixBranch, runBatchFix, type FixProgress, type BatchFixItemResult, type BatchFixAction } from "../../orchestrator/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
@@ -35,15 +36,22 @@ export const fixCommand = new Command("fix")
       ? path.join(os.homedir(), rawRepo.slice(1))
       : path.resolve(rawRepo);
 
-    // Load clusters from past scan results
+    // Load clusters from past scan results, excluding already-fixed ones
     const clusters = await loadClusters(repoPath, opts.task as string | undefined);
-    let filtered = clusters;
+    const fixedIds = await getFixedClusterIds(repoPath);
+    let filtered = clusters.filter((c) => !fixedIds.has(c.id));
     if (opts.minSeverity) {
       filtered = filterBySeverity(filtered, opts.minSeverity as string);
     }
 
     if (filtered.length === 0) {
-      process.stderr.write("  No findings to fix. Run 'kaicho scan' first.\n\n");
+      const total = clusters.length;
+      const skipped = total - filtered.length;
+      if (skipped > 0) {
+        process.stderr.write(`  All findings already fixed (${skipped} in fix log). Run 'kaicho scan' for a fresh scan.\n\n`);
+      } else {
+        process.stderr.write("  No findings to fix. Run 'kaicho scan' first.\n\n");
+      }
       process.exit(1);
     }
 

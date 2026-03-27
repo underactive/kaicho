@@ -18,6 +18,7 @@ import {
   discardFixBranch,
   keepFixBranch,
 } from "../branch/index.js";
+import { recordFix } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
 
 export interface BatchFixItemResult {
@@ -216,6 +217,14 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       };
       items.push(item);
       totalApplied++;
+
+      await recordFix(absRepoPath, {
+        clusterId: cluster.id,
+        file: cluster.file,
+        agent: agentName,
+        branch,
+        fixedAt: new Date().toISOString(),
+      });
 
       notify({
         current: i + 1,

@@ -18,6 +18,7 @@ import {
   discardFixBranch,
   keepFixBranch,
 } from "../branch/index.js";
+import { recordFix } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
 
 export interface FixProgress {
@@ -170,6 +171,14 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
       absRepoPath,
       `fix: ${cluster.category} issue in ${location}\n\nApplied by kaicho fix via ${agentName}`,
     );
+
+    await recordFix(absRepoPath, {
+      clusterId: cluster.id,
+      file: cluster.file,
+      agent: agentName,
+      branch,
+      fixedAt: new Date().toISOString(),
+    });
 
     notify({ step: "done", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"} changed` });
 
