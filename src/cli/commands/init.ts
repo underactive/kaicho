@@ -34,5 +34,20 @@ export const initCommand = new Command("init")
     }
 
     await fs.writeFile(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", "utf-8");
-    process.stdout.write(`  Created ${configPath}\n\n`);
+    process.stdout.write(`  Created ${configPath}\n`);
+
+    // Add .kaicho to .gitignore if the file exists
+    const gitignorePath = path.join(repoPath, ".gitignore");
+    try {
+      const content = await fs.readFile(gitignorePath, "utf-8");
+      if (!content.includes(".kaicho")) {
+        const separator = content.endsWith("\n") ? "" : "\n";
+        await fs.appendFile(gitignorePath, `${separator}.kaicho/\n`, "utf-8");
+        process.stdout.write(`  Added .kaicho/ to .gitignore\n`);
+      }
+    } catch {
+      // No .gitignore — don't create one
+    }
+
+    process.stdout.write("\n");
   });
