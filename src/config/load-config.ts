@@ -56,17 +56,17 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
     log("info", "Loaded config", { path: configPath });
 
     return {
-      agent: typeof raw["agent"] === "string" ? raw["agent"] : undefined,
-      task: typeof raw["task"] === "string" ? raw["task"] : undefined,
-      timeout: typeof raw["timeout"] === "number" ? raw["timeout"] : undefined,
-      scope: typeof raw["scope"] === "string" ? raw["scope"] : undefined,
-      files: typeof raw["files"] === "string" ? raw["files"] : undefined,
-      minSeverity: typeof raw["minSeverity"] === "string" ? raw["minSeverity"] : undefined,
+      agent: str(raw["agent"]),
+      task: str(raw["task"]),
+      timeout: num(raw["timeout"]),
+      scope: str(raw["scope"]),
+      files: str(raw["files"]),
+      minSeverity: str(raw["minSeverity"]),
       models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
       fixModels: isModelsMap(raw["fixModels"]) ? raw["fixModels"] : undefined,
-      reviewer: typeof raw["reviewer"] === "string" ? raw["reviewer"] : undefined,
-      retention: typeof raw["retention"] === "number" ? raw["retention"] : undefined,
-      summarizerModel: typeof raw["summarizerModel"] === "string" ? raw["summarizerModel"] : undefined,
+      reviewer: str(raw["reviewer"]),
+      retention: num(raw["retention"]),
+      summarizerModel: str(raw["summarizerModel"]),
     };
   } catch {
     log("warn", "Invalid config file, ignoring", { path: configPath });
@@ -76,7 +76,17 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
 
 function isModelsMap(val: unknown): val is Record<string, string> {
   if (typeof val !== "object" || val === null || Array.isArray(val)) return false;
-  return Object.values(val as Record<string, unknown>).every((v) => typeof v === "string");
+  const entries = Object.values(val as Record<string, unknown>);
+  if (entries.length === 0) return false; // empty {} treated as unset
+  return entries.every((v) => typeof v === "string");
+}
+
+function str(val: unknown): string | undefined {
+  return typeof val === "string" && val !== "" ? val : undefined;
+}
+
+function num(val: unknown): number | undefined {
+  return typeof val === "number" ? val : undefined;
 }
 
 /**
