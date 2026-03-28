@@ -131,7 +131,13 @@ Create a `kaicho.config.json` in the target repository.
 
 ## Configuration
 
-Create `kaicho.config.json` in your repo root (or run `kaicho init`):
+Global config at `~/.config/kaicho/config.json` applies to all repos. Per-repo `kaicho.config.json` overrides global. CLI flags override both.
+
+```
+global defaults → ~/.config/kaicho/config.json → repo/kaicho.config.json → CLI flags
+```
+
+Create per-repo config with `kaicho init`, or create the global config manually:
 
 ```json
 {

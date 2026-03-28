@@ -1,8 +1,11 @@
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 import { log } from "../logger/index.js";
 
 const CONFIG_FILENAME = "kaicho.config.json";
+const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".config", "kaicho");
+export const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "config.json");
 
 export interface KaichoConfig {
   agent?: string;
@@ -19,12 +22,28 @@ export interface KaichoConfig {
 }
 
 /**
- * Load config from kaicho.config.json in the target repo root.
- * Returns empty object if no config file found.
+ * Load config: global (~/.config/kaicho/config.json) merged with
+ * per-repo (kaicho.config.json). Per-repo values override global.
  */
 export async function loadConfig(repoPath: string): Promise<KaichoConfig> {
-  const configPath = path.join(repoPath, CONFIG_FILENAME);
+  const globalConfig = await loadConfigFile(GLOBAL_CONFIG_PATH);
+  const repoConfig = await loadConfigFile(path.join(repoPath, CONFIG_FILENAME));
 
+  // Per-repo overrides global. For models maps, per-repo replaces entirely (not merged key-by-key).
+  const merged: KaichoConfig = {};
+  for (const key of Object.keys({ ...globalConfig, ...repoConfig }) as (keyof KaichoConfig)[]) {
+    const repoVal = repoConfig[key];
+    const globalVal = globalConfig[key];
+    (merged as Record<string, unknown>)[key] = repoVal ?? globalVal;
+  }
+
+  return merged;
+}
+
+/**
+ * Load and parse a single config file. Returns empty object if not found.
+ */
+async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
   let content: string;
   try {
     content = await fs.readFile(configPath, "utf-8");

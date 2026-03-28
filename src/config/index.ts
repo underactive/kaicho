@@ -8,5 +8,6 @@ export {
 export {
   loadConfig,
   mergeWithConfig,
+  GLOBAL_CONFIG_PATH,
   type KaichoConfig,
 } from "./load-config.js";
