@@ -104,6 +104,16 @@ async function executeValidation(
   // Parse verdict from response
   const validation = extractVerdict(result.rawOutput);
 
+  if (!validation) {
+    log("warn", "Could not parse reviewer verdict", { reviewer: reviewerName });
+    return {
+      reviewer: reviewerName,
+      verdict: "skipped",
+      rationale: "Could not parse reviewer response. Manual review recommended.",
+      durationMs: Date.now() - startMs,
+    };
+  }
+
   return {
     reviewer: reviewerName,
     verdict: validation.verdict,
@@ -116,7 +126,7 @@ async function executeValidation(
  * Extract the verdict JSON from the reviewer's response.
  * Handles both schema-enforced (Claude/Codex wrapper) and freeform (Cursor/Gemini) output.
  */
-function extractVerdict(rawOutput: string): ValidationResult {
+function extractVerdict(rawOutput: string): ValidationResult | null {
   // Try parsing the CLI wrapper first
   try {
     const wrapper = JSON.parse(rawOutput) as Record<string, unknown>;
@@ -147,11 +157,8 @@ function extractVerdict(rawOutput: string): ValidationResult {
   const parsed = tryParseVerdict(rawOutput);
   if (parsed) return parsed;
 
-  // Can't parse — default to concern with the raw text
-  return {
-    verdict: "concern",
-    rationale: "Could not parse reviewer response. Manual review recommended.",
-  };
+  // Can't parse — return null so the caller can handle as "skipped"
+  return null;
 }
 
 function tryParseVerdict(text: string): ValidationResult | null {
@@ -163,18 +170,57 @@ function tryParseVerdict(text: string): ValidationResult | null {
     // Not pure JSON
   }
 
-  // Try extracting from markdown fences or embedded JSON
-  const match = text.match(/\{[\s\S]*?"verdict"[\s\S]*?"rationale"[\s\S]*?\}/);
-  if (match) {
+  // Extract JSON objects using brace-depth matching
+  for (const candidate of extractJsonObjects(text)) {
     try {
-      const obj = JSON.parse(match[0]);
+      const obj = JSON.parse(candidate);
       if (isVerdict(obj)) return obj as ValidationResult;
     } catch {
-      // Invalid JSON in match
+      // Invalid JSON candidate
     }
   }
 
   return null;
+}
+
+/**
+ * Extract top-level JSON objects from text using brace-depth counting.
+ * Handles nested braces inside string values correctly.
+ */
+function extractJsonObjects(text: string): string[] {
+  const results: string[] = [];
+  let i = 0;
+
+  while (i < text.length) {
+    if (text[i] !== "{") { i++; continue; }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    const start = i;
+
+    for (; i < text.length; i++) {
+      const ch = text[i]!;
+
+      if (escaped) { escaped = false; continue; }
+      if (ch === "\\") { escaped = true; continue; }
+
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          results.push(text.slice(start, i + 1));
+          i++;
+          break;
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 function isVerdict(obj: unknown): boolean {
