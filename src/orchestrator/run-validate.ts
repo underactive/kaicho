@@ -33,8 +33,14 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
   const absRepoPath = path.resolve(expanded);
   const startMs = Date.now();
 
-  // Pick reviewer: explicit override > auto-pick
-  const reviewerName = options.reviewer ?? pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES);
+  // Pick reviewer: explicit override > pool > auto-pick
+  let reviewerName: string | null;
+  if (options.reviewer?.includes(",")) {
+    const pool = options.reviewer.split(",").map((s) => s.trim());
+    reviewerName = pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES, pool);
+  } else {
+    reviewerName = options.reviewer ?? pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES);
+  }
   if (!reviewerName) {
     return {
       reviewer: "none",

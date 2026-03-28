@@ -107,14 +107,23 @@ export interface ValidationResult {
 
 /**
  * Pick a reviewer agent different from the fixer.
- * Prefers agents that found the original issue (they have context).
- * Falls back to any available agent.
+ * If a reviewer pool is provided, pick randomly from it (excluding the fixer).
+ * Otherwise: prefer agents that found the issue, then any available agent.
  */
 export function pickReviewer(
   fixAgent: string,
   clusterAgents: string[],
   allAgents: string[],
+  reviewerPool?: string[],
 ): string | null {
+  // Pool provided: pick randomly from eligible members
+  if (reviewerPool && reviewerPool.length > 0) {
+    const eligible = reviewerPool.filter((a) => a !== fixAgent);
+    if (eligible.length > 0) {
+      return eligible[Math.floor(Math.random() * eligible.length)]!;
+    }
+  }
+
   // First: try agents that found the issue (excluding the fixer)
   for (const agent of clusterAgents) {
     if (agent !== fixAgent) return agent;
