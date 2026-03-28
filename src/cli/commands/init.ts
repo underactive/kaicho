@@ -5,7 +5,13 @@ import { Command } from "commander";
 
 const DEFAULT_CONFIG = {
   task: "security",
+  timeout: 600000,
+  scope: null,
+  files: null,
+  minSeverity: null,
+  models: {},
   retention: 3,
+  summarizerModel: "gemma3:1b",
 };
 
 export const initCommand = new Command("init")
