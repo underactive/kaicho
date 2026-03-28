@@ -23,14 +23,14 @@ cleanup and investment.
 | `suggestion-store`| A     | Symlink/traversal protection, 6 tests           | 2026-03-26    |
 | `dedup`           | A     | Proximity clustering, severity filter, 12 tests | 2026-03-26    |
 | `scope`           | A     | git ls-files + fallback, glob matching, 9 tests | 2026-03-26    |
-| `orchestrator`    | A     | Scan + fix + batch-fix + retry + validation, shared resolveAdapter, 27 tests | 2026-03-27 |
+| `orchestrator`    | A     | Scan + fix + parallel-fix + retry + validation, shared resolveAdapter, 34 tests | 2026-03-27 |
 | `cli`             | A-    | 6 commands, 2 formatters, 12 formatter tests      | 2026-03-27    |
 | `config`          | B+    | Config load + merge works, no tests (simple)     | 2026-03-26    |
-| `prompts`         | A     | 3 scan + fix + retry + validate (category-scoped), 14 tests | 2026-03-27 |
+| `prompts`         | A     | 8 scan tasks + fix + retry + validate (category-scoped), 14 tests | 2026-03-27 |
 | `logger`          | B+    | Minimal structured logger, no tests (trivial)    | 2026-03-26    |
 | `types`           | A     | Zod schemas, AgentMode, clean interfaces         | 2026-03-26    |
-| `branch`          | A-    | Create/diff/commit/discard/reset, 4 tests         | 2026-03-27    |
-| `fix-log`         | B+    | Self-pruning fix tracker, no tests               | 2026-03-26    |
+| `branch`          | A     | Create/diff/commit/discard/reset + worktree lifecycle, 8 tests | 2026-03-27 |
+| `fix-log`         | A-    | Self-pruning fix + discarded fix log, no tests    | 2026-03-27    |
 | `summarizer`      | B+    | Ollama integration, graceful fallback, no tests  | 2026-03-26    |
 | `repo-context`    | —     | Not yet implemented (scoping partially covers)   | 2026-03-26    |
 
@@ -40,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | A-    | 133 tests across 15 files, all critical domains covered | 2026-03-27 |
+| Test coverage     | A-    | 144 tests across 17 files, all critical domains covered | 2026-03-27 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process

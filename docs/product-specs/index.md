@@ -19,11 +19,11 @@ code is structured.
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [scan](scan.md) | Implemented | Multi-agent parallel scanning with dedup and scoping |
+| [scan](scan.md) | Implemented | Multi-agent parallel scanning, 8 task types, dedup and scoping |
 | [report](report.md) | Implemented | View and filter past scan results |
 | [list](list.md) | Implemented | Show installed agents and versions |
 | [config](config.md) | Implemented | Per-repo config file + kaicho init |
-| [fix](fix.md) | Implemented (Phase A+B+C + retry) | Single + batch fix, validation, retry, fixer context, verbose |
+| [fix](fix.md) | Implemented (Phase A-D) | Single + parallel worktree batch fix, validation, retry, discarded fix log |
 | enrich | Implemented | Ollama LLM summaries for findings (auto or manual) |
 
 ## Writing specs

@@ -9,7 +9,7 @@ phases.
 | Schema | Description | Used by |
 |--------|-------------|---------|
 | [suggestion.schema.json](suggestion.schema.json) | A single finding from an agent scan | Output parser, suggestion store, dedup |
-| [run-record.schema.json](run-record.schema.json) | Persisted scan result in `.kaicho/runs/` | Suggestion store, report command, future fix phase |
+| [run-record.schema.json](run-record.schema.json) | Persisted scan result in `.kaicho/runs/` | Suggestion store, report command, fix command |
 | [suggestion-cluster.schema.json](suggestion-cluster.schema.json) | Deduplicated group of related suggestions | Dedup engine, formatters, JSON output |
 | [kaicho-config.schema.json](kaicho-config.schema.json) | Per-repo config file format | `kaicho init`, `kaicho scan` config loader |
 

@@ -77,6 +77,14 @@ writing the code myself.
 - Useful for debugging stuck agents (e.g., waiting for plan approval)
 - Agent output is still captured for error diagnostics
 
+## Discarded fix log
+
+- Discarded fixes persist to `.kaicho/discarded.json` with full context
+- Records: issue details, attempted diff, fixer context, reviewer verdict + rationale
+- Tracks discard reason: `user-discard`, `auto-concern`, `retry-failed`
+- Self-prunes entries older than 30 days
+- Enables future planner agent to learn from failed attempts
+
 ## Not in scope
 
 - Auto-merging the fix branch
