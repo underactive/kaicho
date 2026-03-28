@@ -8,6 +8,7 @@ const GLOBAL_CONFIG_DIR = path.join(os.homedir(), ".config", "kaicho");
 export const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CONFIG_DIR, "config.json");
 
 export interface KaichoConfig {
+  agents?: string[];
   agent?: string;
   task?: string;
   timeout?: number;
@@ -56,6 +57,7 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
     log("info", "Loaded config", { path: configPath });
 
     return {
+      agents: isStringArray(raw["agents"]) ? raw["agents"] : undefined,
       agent: str(raw["agent"]),
       task: str(raw["task"]),
       timeout: num(raw["timeout"]),
@@ -87,6 +89,10 @@ function str(val: unknown): string | undefined {
 
 function num(val: unknown): number | undefined {
   return typeof val === "number" ? val : undefined;
+}
+
+function isStringArray(val: unknown): val is string[] {
+  return Array.isArray(val) && val.length > 0 && val.every((v) => typeof v === "string");
 }
 
 /**

@@ -57,10 +57,14 @@ vi.mock("../fix-log/index.js", () => ({
   recordDiscardedFix: mockRecordDiscardedFix,
 }));
 
-vi.mock("../config/index.js", () => ({
-  AGENT_CONFIGS: { claude: {}, codex: {}, cursor: {}, gemini: {} },
-  DEFAULT_TIMEOUT_MS: 1800000,
-}));
+vi.mock("../config/index.js", async () => {
+  const real = await vi.importActual<typeof import("../config/index.js")>("../config/index.js");
+  return {
+    ...real,
+    AGENT_CONFIGS: { claude: {}, codex: {}, cursor: {}, gemini: {} },
+    DEFAULT_TIMEOUT_MS: 1800000,
+  };
+});
 
 import { runParallelFix } from "./run-parallel-fix.js";
 

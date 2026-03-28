@@ -11,3 +11,10 @@ export {
   GLOBAL_CONFIG_PATH,
   type KaichoConfig,
 } from "./load-config.js";
+
+export {
+  parseAgentSpec,
+  getBase,
+  resolveModel,
+  type AgentSpec,
+} from "./agent-spec.js";

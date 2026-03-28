@@ -1,19 +1,14 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentAdapter, RunResult } from "../types/index.js";
-import {
-  ClaudeAdapter,
-  CodexAdapter,
-  CursorAdapter,
-  GeminiAdapter,
-} from "../agent-adapters/index.js";
-import { AGENT_CONFIGS } from "../config/index.js";
+import type { RunResult } from "../types/index.js";
+import { resolveModel, getBase } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt, buildTestingScanPrompt, buildDxScanPrompt } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
 import { summarizeClusters, saveEnrichedCache } from "../summarizer/index.js";
 import { log } from "../logger/index.js";
+import { resolveAdapter, ALL_AGENT_NAMES } from "./resolve-adapter.js";
 
 export interface ScanProgress {
   agent: string;
@@ -54,30 +49,6 @@ const TASK_PROMPTS: Record<string, (fileManifest?: string) => string> = {
   testing: buildTestingScanPrompt,
   dx: buildDxScanPrompt,
 };
-
-const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
-
-function resolveAdapter(agent: string, timeoutMs?: number, model?: string): AgentAdapter {
-  const opts: Partial<import("../types/index.js").AgentConfig> = {};
-  if (timeoutMs) opts.timeoutMs = timeoutMs;
-  if (model) opts.model = model;
-  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
-
-  switch (agent) {
-    case "claude":
-      return new ClaudeAdapter(hasOpts);
-    case "codex":
-      return new CodexAdapter(hasOpts);
-    case "cursor":
-      return new CursorAdapter(hasOpts);
-    case "gemini":
-      return new GeminiAdapter(hasOpts);
-    default:
-      throw new Error(
-        `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
-      );
-  }
-}
 
 /**
  * Run a single agent scan. Used internally and when --agent is specified.
@@ -178,14 +149,16 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
 
   if (options.exclude && options.exclude.length > 0) {
     const excludeSet = new Set(options.exclude);
-    agentsToRun = agentsToRun.filter((a) => !excludeSet.has(a));
+    agentsToRun = agentsToRun.filter((a) =>
+      !excludeSet.has(a) && !excludeSet.has(getBase(a)),
+    );
   }
 
   const startMs = Date.now();
 
   // Run all agents in parallel
   const settled = await Promise.allSettled(
-    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs, options.models?.[a], options.onProgress)),
+    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs, resolveModel(a, options.models), options.onProgress)),
   );
 
   const results: RunResult[] = settled.map((s, i) => {

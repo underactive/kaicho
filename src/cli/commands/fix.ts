@@ -14,7 +14,7 @@ import { resolveAdapter } from "../../orchestrator/resolve-adapter.js";
 import { resetLastCommit, captureDiff, commitFix } from "../../branch/index.js";
 import { buildRetryFixPrompt } from "../../prompts/index.js";
 import { buildCommitMessage } from "../../orchestrator/commit-message.js";
-import { loadConfig } from "../../config/index.js";
+import { loadConfig, resolveModel } from "../../config/index.js";
 import type { RunResult } from "../../types/index.js";
 import type { RunRecord } from "../../suggestion-store/index.js";
 
@@ -129,7 +129,7 @@ export const fixCommand = new Command("fix")
       }
     };
 
-    const fixModel = (config.fixModels ?? config.models)?.[agentName];
+    const fixModel = resolveModel(agentName, config.fixModels) ?? resolveModel(agentName, config.models);
     const result = await runFix({
       repoPath: rawRepo,
       cluster,
@@ -430,7 +430,7 @@ async function retrySingleFix(
 ): Promise<{ diff: string; filesChanged: number } | null> {
   await resetLastCommit(opts.repoPath);
 
-  const adapter = resolveAdapter(opts.reviewer, opts.timeoutMs, opts.models?.[opts.reviewer]);
+  const adapter = resolveAdapter(opts.reviewer, opts.timeoutMs, resolveModel(opts.reviewer, opts.models));
   const prompt = buildRetryFixPrompt(opts.cluster, opts.failedDiff, opts.concern);
 
   process.stdout.write(`  ${color(`Retrying with ${opts.reviewer}...`, "\x1b[90m")}\n`);
@@ -441,7 +441,7 @@ async function retrySingleFix(
   const { diff, filesChanged } = await captureDiff(opts.repoPath, opts.previousBranch);
   if (filesChanged === 0) return null;
 
-  await commitFix(opts.repoPath, buildCommitMessage(opts.cluster, opts.reviewer, opts.models?.[opts.reviewer]));
+  await commitFix(opts.repoPath, buildCommitMessage(opts.cluster, opts.reviewer, resolveModel(opts.reviewer, opts.models)));
   return { diff, filesChanged };
 }
 

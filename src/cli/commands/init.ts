@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { Command } from "commander";
 
 const DEFAULT_CONFIG = {
+  agents: null,
   task: "security",
   timeout: 1800000,
   scope: null,

@@ -3,6 +3,7 @@ import * as path from "node:path";
 import type { SuggestionCluster } from "../dedup/index.js";
 import { buildFixPrompt, extractFixerContext } from "../prompts/index.js";
 import { resolveAdapter } from "./resolve-adapter.js";
+import { resolveModel } from "../config/index.js";
 import { executeRetry } from "./batch-fix-retry.js";
 import { buildCommitMessage } from "./commit-message.js";
 import {
@@ -139,7 +140,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
         summary: cluster.summary ?? undefined,
       });
 
-      const adapter = resolveAdapter(agentName, timeoutMs, options.models?.[agentName], options.verbose);
+      const adapter = resolveAdapter(agentName, timeoutMs, resolveModel(agentName, options.models), options.verbose);
       const available = await adapter.isAvailable();
 
       if (!available) {
@@ -209,7 +210,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       }
 
       // Commit this individual fix
-      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.scanModels));
+      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, resolveModel(agentName, options.models), options.scanModels));
 
       const item: BatchFixItemResult = {
         clusterId: cluster.id,
@@ -251,7 +252,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
           totalApplied--;
           modifiedFiles.delete(cluster.file);
 
-          const retryAdapter = resolveAdapter(action.reviewer, timeoutMs, options.models?.[action.reviewer], options.verbose);
+          const retryAdapter = resolveAdapter(action.reviewer, timeoutMs, resolveModel(action.reviewer, options.models), options.verbose);
           const { item: retryItem, applied } = await executeRetry({
             reviewer: action.reviewer,
             concern: action.concern,

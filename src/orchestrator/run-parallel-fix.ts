@@ -4,6 +4,7 @@ import type { SuggestionCluster } from "../dedup/index.js";
 import { buildFixPrompt, extractFixerContext } from "../prompts/index.js";
 import { buildCommitMessage } from "./commit-message.js";
 import { resolveAdapter } from "./resolve-adapter.js";
+import { resolveModel } from "../config/index.js";
 import { executeParallelRetry } from "./parallel-fix-retry.js";
 import {
   ensureCleanWorkTree,
@@ -155,7 +156,7 @@ async function executeFixInWorktree(
   }
 
   try {
-    const adapter = resolveAdapter(agentName, options.timeoutMs, options.models?.[agentName], options.verbose);
+    const adapter = resolveAdapter(agentName, options.timeoutMs, resolveModel(agentName, options.models), options.verbose);
     if (!(await adapter.isAvailable())) {
       await removeFixWorktree(absRepoPath, worktreePath, branch, true);
       return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, { error: `Agent "${agentName}" not installed` });
@@ -200,11 +201,11 @@ async function executeFixInWorktree(
       });
       validation = valResult;
       if (valResult.reviewer !== "none") {
-        reviewerInfo = { name: valResult.reviewer, model: options.models?.[valResult.reviewer] };
+        reviewerInfo = { name: valResult.reviewer, model: resolveModel(valResult.reviewer, options.models) };
       }
     }
 
-    await commitFix(worktreePath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.scanModels, reviewerInfo));
+    await commitFix(worktreePath, buildCommitMessage(cluster, agentName, resolveModel(agentName, options.models), options.scanModels, reviewerInfo));
     n("applied", { agent: agentName, branch, filesChanged });
 
     return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, {
@@ -300,11 +301,11 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
           totalDiscarded++;
         } else if (typeof action === "object" && action.action === "retry") {
-          const retryAdapter = resolveAdapter(action.reviewer, options.timeoutMs, options.models?.[action.reviewer], options.verbose);
+          const retryAdapter = resolveAdapter(action.reviewer, options.timeoutMs, resolveModel(action.reviewer, options.models), options.verbose);
           const cluster = clusters[orderMap.get(item.clusterId)!]!;
           const { item: retryItem, applied } = await executeParallelRetry({
             reviewer: action.reviewer,
-            reviewerModel: options.models?.[action.reviewer],
+            reviewerModel: resolveModel(action.reviewer, options.models),
             scanModels: options.scanModels,
             concern: action.concern,
             adapter: retryAdapter,

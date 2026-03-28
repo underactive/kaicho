@@ -4,6 +4,7 @@ import type { AgentAdapter } from "../types/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 import { buildValidationPrompt, pickReviewer, type ValidationResult } from "../prompts/validate.js";
 import { resolveAdapter, ALL_AGENT_NAMES } from "./resolve-adapter.js";
+import { resolveModel } from "../config/index.js";
 import { log } from "../logger/index.js";
 
 export interface ValidateOptions {
@@ -50,7 +51,7 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
     };
   }
 
-  const adapter = resolveAdapter(reviewerName, timeoutMs, options.models?.[reviewerName], options.verbose);
+  const adapter = resolveAdapter(reviewerName, timeoutMs, resolveModel(reviewerName, options.models), options.verbose);
 
   const available = await adapter.isAvailable();
   if (!available) {
@@ -65,7 +66,7 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
       };
     }
 
-    const fallbackAdapter = resolveAdapter(fallback, timeoutMs, options.models?.[fallback], options.verbose);
+    const fallbackAdapter = resolveAdapter(fallback, timeoutMs, resolveModel(fallback, options.models), options.verbose);
     const fallbackAvailable = await fallbackAdapter.isAvailable();
     if (!fallbackAvailable) {
       return {

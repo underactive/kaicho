@@ -58,7 +58,9 @@ export const scanCommand = new Command("scan")
       }
     };
 
-    const agentsList = opts.agents ? (opts.agents as string).split(",").map((s: string) => s.trim()) : undefined;
+    const agentsList = opts.agents
+      ? (opts.agents as string).split(",").map((s: string) => s.trim())
+      : config.agents;
     const excludeList = opts.exclude ? (opts.exclude as string).split(",").map((s: string) => s.trim()) : undefined;
 
     const multiResult = await runScan({

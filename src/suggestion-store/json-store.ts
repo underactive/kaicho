@@ -45,7 +45,8 @@ export class JsonStore {
     };
 
     const safeTimestamp = result.startedAt.replace(/[:.]/g, "-");
-    const filename = `${safeTimestamp}_${result.agent}_${task}.json`;
+    const safeAgent = result.agent.replace(/:/g, "--");
+    const filename = `${safeTimestamp}_${safeAgent}_${task}.json`;
     const filePath = path.join(this.runsDir, filename);
 
     await this.safeWriteFile(filePath, JSON.stringify(record, null, 2), repoPath);

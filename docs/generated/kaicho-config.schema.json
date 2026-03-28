@@ -5,6 +5,11 @@
   "description": "Per-repo configuration file (kaicho.config.json). All fields are optional — CLI flags override these values.",
   "type": "object",
   "properties": {
+    "agents": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Default agent list for scans. Supports variants like 'cursor:gemini-3.1-pro'. Overridden by --agents CLI flag."
+    },
     "agent": {
       "type": "string",
       "description": "Default agent to use (omit to run all available)"
@@ -34,7 +39,12 @@
     },
     "models": {
       "type": "object",
-      "description": "Per-agent model overrides (e.g. {\"codex\": \"o4-mini\", \"gemini\": \"gemini-2.5-pro\"})",
+      "description": "Per-agent model overrides for scans (e.g. {\"codex\": \"o4-mini\", \"cursor:gemini-3.1-pro\": \"gemini-3.1-pro\"})",
+      "additionalProperties": { "type": "string" }
+    },
+    "fixModels": {
+      "type": "object",
+      "description": "Per-agent model overrides for fixes (falls back to models if not set)",
       "additionalProperties": { "type": "string" }
     },
     "reviewer": {

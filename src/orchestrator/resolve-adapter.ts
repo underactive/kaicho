@@ -5,31 +5,39 @@ import {
   CursorAdapter,
   GeminiAdapter,
 } from "../agent-adapters/index.js";
-import { AGENT_CONFIGS } from "../config/index.js";
+import { AGENT_CONFIGS, parseAgentSpec } from "../config/index.js";
 
 const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
 
 export { ALL_AGENT_NAMES };
 
 export function resolveAdapter(agent: string, timeoutMs?: number, model?: string, verbose?: boolean): AgentAdapter {
-  const opts: Partial<import("../types/index.js").AgentConfig> = {};
-  if (timeoutMs) opts.timeoutMs = timeoutMs;
-  if (model) opts.model = model;
-  if (verbose) opts.verbose = true;
-  const hasOpts = Object.keys(opts).length > 0 ? opts : undefined;
+  const spec = parseAgentSpec(agent);
 
-  switch (agent) {
+  if (!AGENT_CONFIGS[spec.base]) {
+    throw new Error(
+      `Unknown agent: ${spec.base}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
+    );
+  }
+
+  const opts: Partial<import("../types/index.js").AgentConfig> = {};
+  opts.name = spec.fullName;
+  if (timeoutMs) opts.timeoutMs = timeoutMs;
+  opts.model = model ?? spec.model;
+  if (verbose) opts.verbose = true;
+
+  switch (spec.base) {
     case "claude":
-      return new ClaudeAdapter(hasOpts);
+      return new ClaudeAdapter(opts);
     case "codex":
-      return new CodexAdapter(hasOpts);
+      return new CodexAdapter(opts);
     case "cursor":
-      return new CursorAdapter(hasOpts);
+      return new CursorAdapter(opts);
     case "gemini":
-      return new GeminiAdapter(hasOpts);
+      return new GeminiAdapter(opts);
     default:
       throw new Error(
-        `Unknown agent: ${agent}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
+        `Unknown agent: ${spec.base}. Available: ${ALL_AGENT_NAMES.join(", ")}`,
       );
   }
 }
