@@ -5,7 +5,7 @@ import { Command } from "commander";
 
 const DEFAULT_CONFIG = {
   task: "security",
-  timeout: 600000,
+  timeout: 1800000,
   scope: null,
   files: null,
   minSeverity: null,
