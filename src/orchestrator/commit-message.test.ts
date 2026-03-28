@@ -98,33 +98,28 @@ describe("buildCommitMessage", () => {
     expect(msg).not.toContain("Suggested change:");
   });
 
-  it("includes applied-by footer", () => {
+  it("includes signature footer without reviewer", () => {
     const msg = buildCommitMessage(makeCluster(), "codex");
-    expect(msg).toContain("Applied by Kaichō via Codex");
+    expect(msg).toContain("Fixed by Codex, applied via Kaichō");
   });
 
-  it("includes model in footer when provided", () => {
+  it("includes model in signature", () => {
     const msg = buildCommitMessage(makeCluster(), "cursor", "composer-2");
-    expect(msg).toContain("Applied by Kaichō via Cursor (composer-2)");
+    expect(msg).toContain("Fixed by Cursor (composer-2), applied via Kaichō");
   });
 
-  it("omits model parenthetical when not provided", () => {
-    const msg = buildCommitMessage(makeCluster(), "claude");
-    expect(msg).toMatch(/Applied by Kaichō via Claude$/);
-  });
-
-  it("includes reviewer in signature when provided", () => {
+  it("includes reviewer in signature", () => {
     const msg = buildCommitMessage(makeCluster(), "codex", "gpt-5.4", undefined, {
       name: "claude",
       model: "opus-4-6",
     });
-    expect(msg).toContain("Applied by Kaichō via Codex (gpt-5.4), reviewed by Claude (opus-4-6)");
+    expect(msg).toContain("Fixed by Codex (gpt-5.4) and reviewed by Claude (opus-4-6), applied via Kaichō");
   });
 
-  it("includes reviewer without model when model not set", () => {
+  it("includes reviewer without model", () => {
     const msg = buildCommitMessage(makeCluster(), "codex", undefined, undefined, {
       name: "cursor",
     });
-    expect(msg).toContain("Applied by Kaichō via Codex, reviewed by Cursor");
+    expect(msg).toContain("Fixed by Codex and reviewed by Cursor, applied via Kaichō");
   });
 });

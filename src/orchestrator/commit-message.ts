@@ -63,13 +63,13 @@ export function buildCommitMessage(
 
   const agentDisplay = agent.charAt(0).toUpperCase() + agent.slice(1);
   const modelSuffix = model ? ` (${model})` : "";
-  let signature = `Applied by Kaichō via ${agentDisplay}${modelSuffix}`;
   if (reviewer) {
     const reviewerDisplay = reviewer.name.charAt(0).toUpperCase() + reviewer.name.slice(1);
     const reviewerModel = reviewer.model ? ` (${reviewer.model})` : "";
-    signature += `, reviewed by ${reviewerDisplay}${reviewerModel}`;
+    lines.push("", `Fixed by ${agentDisplay}${modelSuffix} and reviewed by ${reviewerDisplay}${reviewerModel}, applied via Kaichō`);
+  } else {
+    lines.push("", `Fixed by ${agentDisplay}${modelSuffix}, applied via Kaichō`);
   }
-  lines.push("", signature);
 
   return lines.join("\n");
 }
