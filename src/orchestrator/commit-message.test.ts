@@ -112,4 +112,19 @@ describe("buildCommitMessage", () => {
     const msg = buildCommitMessage(makeCluster(), "claude");
     expect(msg).toMatch(/Applied by Kaichō via Claude$/);
   });
+
+  it("includes reviewer in signature when provided", () => {
+    const msg = buildCommitMessage(makeCluster(), "codex", "gpt-5.4", undefined, {
+      name: "claude",
+      model: "opus-4-6",
+    });
+    expect(msg).toContain("Applied by Kaichō via Codex (gpt-5.4), reviewed by Claude (opus-4-6)");
+  });
+
+  it("includes reviewer without model when model not set", () => {
+    const msg = buildCommitMessage(makeCluster(), "codex", undefined, undefined, {
+      name: "cursor",
+    });
+    expect(msg).toContain("Applied by Kaichō via Codex, reviewed by Cursor");
+  });
 });

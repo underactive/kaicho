@@ -16,11 +16,17 @@ import type { SuggestionCluster } from "../dedup/index.js";
  *
  *   Applied by Kaichō via <agent>
  */
+export interface CommitMessageReviewer {
+  name: string;
+  model?: string;
+}
+
 export function buildCommitMessage(
   cluster: SuggestionCluster,
   agent: string,
   model?: string,
   scanModels?: Record<string, string>,
+  reviewer?: CommitMessageReviewer,
 ): string {
   const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
 
@@ -57,7 +63,13 @@ export function buildCommitMessage(
 
   const agentDisplay = agent.charAt(0).toUpperCase() + agent.slice(1);
   const modelSuffix = model ? ` (${model})` : "";
-  lines.push("", `Applied by Kaichō via ${agentDisplay}${modelSuffix}`);
+  let signature = `Applied by Kaichō via ${agentDisplay}${modelSuffix}`;
+  if (reviewer) {
+    const reviewerDisplay = reviewer.name.charAt(0).toUpperCase() + reviewer.name.slice(1);
+    const reviewerModel = reviewer.model ? ` (${reviewer.model})` : "";
+    signature += `, reviewed by ${reviewerDisplay}${reviewerModel}`;
+  }
+  lines.push("", signature);
 
   return lines.join("\n");
 }

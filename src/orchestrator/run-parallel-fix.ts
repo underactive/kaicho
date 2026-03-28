@@ -181,13 +181,11 @@ async function executeFixInWorktree(
       return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, { status: "no-changes" });
     }
 
-    await commitFix(worktreePath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.scanModels));
-    n("applied", { agent: agentName, branch, filesChanged });
-
     const fixerContext = extractFixerContext(result.rawOutput) ?? undefined;
 
     // Run validation in parallel with other fixes (reviewer reads from worktree)
     let validation: ValidateResult | undefined;
+    let reviewerInfo: import("./commit-message.js").CommitMessageReviewer | undefined;
     if (options.validate) {
       const valResult = await runValidation({
         repoPath: worktreePath,
@@ -201,7 +199,13 @@ async function executeFixInWorktree(
         fixerContext,
       });
       validation = valResult;
+      if (valResult.reviewer !== "none") {
+        reviewerInfo = { name: valResult.reviewer, model: options.models?.[valResult.reviewer] };
+      }
     }
+
+    await commitFix(worktreePath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.scanModels, reviewerInfo));
+    n("applied", { agent: agentName, branch, filesChanged });
 
     return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, {
       status: "applied", filesChanged, diff, fixerContext, validation,
