@@ -54,7 +54,8 @@ export function buildCommitMessage(
 
   // Full rationale from each agent
   for (const r of cluster.rationales) {
-    lines.push("", `${r.agent}: ${r.rationale}`);
+    const name = r.agent.charAt(0).toUpperCase() + r.agent.slice(1);
+    lines.push("", `${name}: ${r.rationale}`);
   }
 
   if (cluster.suggestedChange) {
