@@ -6,7 +6,7 @@ Kaicho orchestrates Claude, Codex, Cursor, and Gemini in parallel, normalizes th
 
 ## Why
 
-If you pay for multiple AI coding tools, most of them sit idle. Kaicho puts them all to work — run a security audit, QA review, or documentation check across all your agents at once, get a single deduplicated report with LLM-generated summaries, and apply fixes without leaving the terminal.
+If you pay for multiple AI coding tools, most of them sit idle. Kaichō puts them all to work — run security audits, QA reviews, interface contract checks, state management analysis, and more across all your agents at once. Get a single deduplicated report with LLM-generated summaries, then apply fixes in parallel on isolated git branches.
 
 ## Install
 
@@ -43,8 +43,11 @@ kaicho report --repo=~/my-project
 # 3. Fix — apply fixes on an isolated branch
 kaicho fix --repo=~/my-project
 
-# Or batch fix everything at once
+# Or batch fix in parallel (3 agents at once, independent branches)
 kaicho fix --batch --repo=~/my-project
+
+# With cross-agent validation
+kaicho fix --batch --validate --repo=~/my-project
 ```
 
 ## Commands
@@ -53,13 +56,15 @@ kaicho fix --batch --repo=~/my-project
 
 Run agents against a repository. All installed agents run in parallel.
 
+Available tasks: `security`, `qa`, `docs`, `contracts`, `state`, `resources`, `testing`, `dx`
+
 ```
 Options:
   --agents <agents>       Agents to run (comma-separated, default: all available)
   --exclude <agents>      Exclude agents (comma-separated)
-  --task <task>           Task: security, qa, docs (default: security)
+  --task <task>           Task type (default: security)
   --repo <path>           Path to target repository (default: .)
-  --timeout <ms>          Agent timeout in milliseconds (default: 600000)
+  --timeout <ms>          Agent timeout in milliseconds (default: 1800000)
   --scope <dirs>          Limit to directories (comma-separated)
   --files <patterns>      Limit to file patterns (comma-separated)
   --min-severity <level>  Filter: critical, high, medium, low, info
@@ -79,12 +84,13 @@ Options:
   --id <hash>             Fix a specific finding by short ID
   --cluster <n>           Fix by cluster number
   --task <task>           Filter findings by task type
-  --timeout <ms>          Agent timeout in milliseconds (default: 600000)
+  --timeout <ms>          Agent timeout in milliseconds (default: 1800000)
   --min-severity <level>  Minimum severity to fix
-  --validate              Run a second agent to review the fix
+  --validate              Run a second agent to review each fix
   --reviewer <agent>      Agent for validation (default: auto-pick different from fixer)
-  --batch                 Fix all findings on one branch (continue/skip/stop)
-  --auto                  Batch fix without confirmations
+  --batch                 Fix in parallel with git worktrees (keep/discard/retry per fix)
+  --auto                  Batch fix without confirmations (auto-discard concerns)
+  --verbose               Show agent stderr output in real-time
 ```
 
 ### `kaicho report`
@@ -111,7 +117,7 @@ Generate LLM summaries for findings using a local Ollama model.
 Options:
   --repo <path>           Path to target repository (default: .)
   --task <task>           Filter by task type
-  --model <model>         Ollama model (default: qwen3:1.7b)
+  --model <model>         Ollama model (default: gemma3:1b)
   --force                 Regenerate even if cache exists
 ```
 
@@ -132,7 +138,7 @@ Create `kaicho.config.json` in your repo root (or run `kaicho init`):
   "task": "security",
   "scope": "src",
   "files": "*.ts,*.js",
-  "timeout": 600000,
+  "timeout": 1800000,
   "minSeverity": "medium",
   "models": {
     "codex": "o4-mini",
@@ -153,7 +159,7 @@ CLI flags override config values.
 3. **Cluster** — Suggestions are grouped by file + line proximity (±5 lines), then merged by rationale keyword similarity. Cross-agent agreement surfaces first.
 4. **Enrich** — If Ollama is running, each cluster gets a one-line LLM summary. Cached per-task.
 5. **Store** — Results saved to `.kaicho/runs/` as JSON. Enrichment cached in `.kaicho/enriched-*.json`.
-6. **Fix** — Agent dispatched with write-access flags on an isolated `kaicho/fix-*` branch. Each fix gets a descriptive commit with full rationale. Fix log tracks what's been fixed.
+6. **Fix** — Agent dispatched with write-access flags on an isolated `kaicho/fix-*` branch. Batch mode uses git worktrees for parallel execution (up to 3 concurrent). Each fix gets its own branch — keep or discard independently. Optional cross-agent validation runs in parallel with fixes. Discarded fixes are logged with full context (diff, fixer reasoning, reviewer rationale) for future review.
 
 ## Output
 
