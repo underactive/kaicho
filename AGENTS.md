@@ -62,6 +62,9 @@ suggestions. Everything in this repo serves that loop.
    [README](docs/generated/README.md).
 9. If you discover tech debt, log it in
    [docs/exec-plans/tech-debt-tracker.md](docs/exec-plans/tech-debt-tracker.md).
+10. If you add or change CLI flags, commands, scan tasks, config options, or
+    default values, update [README.md](README.md) to match. The README is
+    the user's first contact — it must reflect the current state of the CLI.
 
 ## What NOT to do
 
