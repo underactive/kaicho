@@ -170,7 +170,7 @@ export const fixCommand = new Command("fix")
         diff: result.diff,
         fixAgent: agentName,
         timeoutMs: parseInt(opts.timeout as string, 10),
-        models: config.models,
+        models: config.fixModels ?? config.models,
         reviewer: reviewerOverride,
         verbose: opts.verbose === true,
         fixerContext: result.fixerContext,
@@ -193,7 +193,7 @@ export const fixCommand = new Command("fix")
             failedDiff: result.diff,
             previousBranch: result.previousBranch,
             timeoutMs: parseInt(opts.timeout as string, 10),
-            models: config.models,
+            models: config.fixModels ?? config.models,
           });
 
           if (retryResult) {
@@ -208,7 +208,7 @@ export const fixCommand = new Command("fix")
               diff: retryResult.diff,
               fixAgent: validation.reviewer,
               timeoutMs: parseInt(opts.timeout as string, 10),
-              models: config.models,
+              models: config.fixModels ?? config.models,
               reviewer: reviewerOverride,
               verbose: opts.verbose === true,
             });

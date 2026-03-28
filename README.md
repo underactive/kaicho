@@ -144,6 +144,10 @@ Create `kaicho.config.json` in your repo root (or run `kaicho init`):
     "codex": "o4-mini",
     "gemini": "gemini-2.5-pro"
   },
+  "fixModels": {
+    "claude": "claude-opus-4-6",
+    "codex": "o3"
+  },
   "reviewer": "claude",
   "retention": 3,
   "summarizerModel": "gemma3:1b"

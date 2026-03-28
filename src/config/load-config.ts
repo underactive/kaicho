@@ -12,6 +12,7 @@ export interface KaichoConfig {
   files?: string;
   minSeverity?: string;
   models?: Record<string, string>;
+  fixModels?: Record<string, string>;
   reviewer?: string;
   retention?: number;
   summarizerModel?: string;
@@ -43,6 +44,7 @@ export async function loadConfig(repoPath: string): Promise<KaichoConfig> {
       files: typeof raw["files"] === "string" ? raw["files"] : undefined,
       minSeverity: typeof raw["minSeverity"] === "string" ? raw["minSeverity"] : undefined,
       models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
+      fixModels: isModelsMap(raw["fixModels"]) ? raw["fixModels"] : undefined,
       reviewer: typeof raw["reviewer"] === "string" ? raw["reviewer"] : undefined,
       retention: typeof raw["retention"] === "number" ? raw["retention"] : undefined,
       summarizerModel: typeof raw["summarizerModel"] === "string" ? raw["summarizerModel"] : undefined,
