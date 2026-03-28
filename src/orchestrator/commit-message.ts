@@ -28,13 +28,15 @@ export function buildCommitMessage(
   const title = cluster.summary
     ?? truncate(cluster.rationales[0]?.rationale ?? "fix applied", 72);
 
-  const foundBy = cluster.agents
+  const agentList = cluster.agents
     .map((a) => {
       const display = a.charAt(0).toUpperCase() + a.slice(1);
       const m = scanModels?.[a];
       return m ? `${display} (${m})` : display;
     })
     .join(", ");
+  const agreement = cluster.agreement > 1 ? ` {${cluster.agreement}x agreement}` : "";
+  const foundBy = `${agentList}${agreement}`;
 
   const lines: string[] = [
     `fix(${cluster.id}): ${title}`,

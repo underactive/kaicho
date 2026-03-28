@@ -63,9 +63,15 @@ describe("buildCommitMessage", () => {
     expect(msg).toContain("Severity: high | Category: security");
   });
 
-  it("includes found-by with capitalized agent names", () => {
+  it("includes found-by with capitalized agent names and agreement", () => {
     const msg = buildCommitMessage(makeCluster(), "claude");
-    expect(msg).toContain("Found by: Claude, Codex");
+    expect(msg).toContain("Found by: Claude, Codex {2x agreement}");
+  });
+
+  it("omits agreement for single-agent findings", () => {
+    const msg = buildCommitMessage(makeCluster({ agents: ["claude"], agreement: 1 }), "claude");
+    expect(msg).toContain("Found by: Claude");
+    expect(msg).not.toContain("agreement");
   });
 
   it("includes scan models in found-by when provided", () => {
@@ -73,7 +79,7 @@ describe("buildCommitMessage", () => {
       claude: "sonnet-4-6",
       codex: "gpt-5.4-mini",
     });
-    expect(msg).toContain("Found by: Claude (sonnet-4-6), Codex (gpt-5.4-mini)");
+    expect(msg).toContain("Found by: Claude (sonnet-4-6), Codex (gpt-5.4-mini) {2x agreement}");
   });
 
   it("includes rationales from each agent", () => {
