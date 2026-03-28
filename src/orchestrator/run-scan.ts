@@ -9,7 +9,7 @@ import {
 } from "../agent-adapters/index.js";
 import { AGENT_CONFIGS } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
-import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt } from "../prompts/index.js";
+import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt, buildTestingScanPrompt } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
 import { summarizeClusters, saveEnrichedCache } from "../summarizer/index.js";
@@ -51,6 +51,7 @@ const TASK_PROMPTS: Record<string, (fileManifest?: string) => string> = {
   contracts: buildContractsScanPrompt,
   state: buildStateScanPrompt,
   resources: buildResourcesScanPrompt,
+  testing: buildTestingScanPrompt,
 };
 
 const ALL_AGENT_NAMES = Object.keys(AGENT_CONFIGS);
