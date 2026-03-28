@@ -437,7 +437,7 @@ async function retrySingleFix(
   const { diff, filesChanged } = await captureDiff(opts.repoPath, opts.previousBranch);
   if (filesChanged === 0) return null;
 
-  await commitFix(opts.repoPath, buildCommitMessage(opts.cluster, opts.reviewer));
+  await commitFix(opts.repoPath, buildCommitMessage(opts.cluster, opts.reviewer, opts.models?.[opts.reviewer]));
   return { diff, filesChanged };
 }
 

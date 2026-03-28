@@ -143,7 +143,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
 
     // Commit the fix
     notify({ step: "commit", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"}` });
-    await commitFix(absRepoPath, buildCommitMessage(cluster, agentName));
+    await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.model));
 
     await recordFix(absRepoPath, {
       clusterId: cluster.id,

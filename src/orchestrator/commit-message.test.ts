@@ -88,4 +88,14 @@ describe("buildCommitMessage", () => {
     const msg = buildCommitMessage(makeCluster(), "codex");
     expect(msg).toContain("Applied by Kaichō via Codex");
   });
+
+  it("includes model in footer when provided", () => {
+    const msg = buildCommitMessage(makeCluster(), "cursor", "composer-2");
+    expect(msg).toContain("Applied by Kaichō via Cursor (composer-2)");
+  });
+
+  it("omits model parenthetical when not provided", () => {
+    const msg = buildCommitMessage(makeCluster(), "claude");
+    expect(msg).toMatch(/Applied by Kaichō via Claude$/);
+  });
 });

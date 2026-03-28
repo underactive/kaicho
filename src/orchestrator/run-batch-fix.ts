@@ -208,7 +208,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       }
 
       // Commit this individual fix
-      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName));
+      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.models?.[agentName]));
 
       const item: BatchFixItemResult = {
         clusterId: cluster.id,
