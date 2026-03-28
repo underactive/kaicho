@@ -28,6 +28,7 @@ export interface FixOptions {
   agent?: string;
   timeoutMs?: number;
   model?: string;
+  scanModels?: Record<string, string>;
   verbose?: boolean;
   onProgress?: (progress: FixProgress) => void;
 }
@@ -143,7 +144,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
 
     // Commit the fix
     notify({ step: "commit", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"}` });
-    await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.model));
+    await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.model, options.scanModels));
 
     await recordFix(absRepoPath, {
       clusterId: cluster.id,

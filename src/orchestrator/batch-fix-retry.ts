@@ -10,6 +10,7 @@ import type { BatchFixItemResult, BatchFixProgress } from "./run-batch-fix.js";
 export interface RetryContext {
   reviewer: string;
   reviewerModel?: string;
+  scanModels?: Record<string, string>;
   concern: string;
   adapter: AgentAdapter;
   repoPath: string;
@@ -74,7 +75,7 @@ export async function executeRetry(ctx: RetryContext): Promise<RetryOutcome> {
     return { item, applied: false };
   }
 
-  await commitFix(ctx.repoPath, buildCommitMessage(ctx.cluster, ctx.reviewer, ctx.reviewerModel));
+  await commitFix(ctx.repoPath, buildCommitMessage(ctx.cluster, ctx.reviewer, ctx.reviewerModel, ctx.scanModels));
 
   await recordFix(ctx.repoPath, {
     clusterId: ctx.cluster.id,

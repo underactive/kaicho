@@ -63,9 +63,17 @@ describe("buildCommitMessage", () => {
     expect(msg).toContain("Severity: high | Category: security");
   });
 
-  it("includes agent agreement count", () => {
+  it("includes found-by with capitalized agent names", () => {
     const msg = buildCommitMessage(makeCluster(), "claude");
-    expect(msg).toContain("Found by: claude, codex (2x agreement)");
+    expect(msg).toContain("Found by: Claude, Codex");
+  });
+
+  it("includes scan models in found-by when provided", () => {
+    const msg = buildCommitMessage(makeCluster(), "claude", undefined, {
+      claude: "sonnet-4-6",
+      codex: "gpt-5.4-mini",
+    });
+    expect(msg).toContain("Found by: Claude (sonnet-4-6), Codex (gpt-5.4-mini)");
   });
 
   it("includes rationales from each agent", () => {

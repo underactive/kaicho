@@ -9,6 +9,7 @@ import type { ParallelFixItemResult } from "./run-parallel-fix.js";
 export interface ParallelRetryContext {
   reviewer: string;
   reviewerModel?: string;
+  scanModels?: Record<string, string>;
   concern: string;
   adapter: AgentAdapter;
   worktreePath: string;
@@ -62,7 +63,7 @@ export async function executeParallelRetry(ctx: ParallelRetryContext): Promise<P
     };
   }
 
-  await commitFix(ctx.worktreePath, buildCommitMessage(ctx.cluster, ctx.reviewer, ctx.reviewerModel));
+  await commitFix(ctx.worktreePath, buildCommitMessage(ctx.cluster, ctx.reviewer, ctx.reviewerModel, ctx.scanModels));
 
   return {
     item: {

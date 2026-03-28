@@ -104,6 +104,8 @@ export const fixCommand = new Command("fix")
       agentName = cluster.agents[0] ?? "claude";
     }
 
+    const config = await loadConfig(repoPath);
+
     process.stdout.write(`\n  Fixing ${color(`[${cluster.severity}]`, "\x1b[33m")} ${location} with ${color(agentName, "\x1b[1m")}...\n\n`);
 
     const isTTY = process.stderr.isTTY;
@@ -127,11 +129,14 @@ export const fixCommand = new Command("fix")
       }
     };
 
+    const fixModel = (config.fixModels ?? config.models)?.[agentName];
     const result = await runFix({
       repoPath: rawRepo,
       cluster,
       agent: agentName,
       timeoutMs: parseInt(opts.timeout as string, 10),
+      model: fixModel,
+      scanModels: config.models,
       verbose: opts.verbose === true,
       onProgress,
     });
@@ -161,7 +166,6 @@ export const fixCommand = new Command("fix")
 
     // Validate with a second agent if requested
     if (opts.validate && result.diff) {
-      const config = await loadConfig(repoPath);
       process.stdout.write(`  ${color("Validating...", "\x1b[90m")}\n`);
       const reviewerOverride = (opts.reviewer as string | undefined) ?? config.reviewer;
       const validation = await runValidation({

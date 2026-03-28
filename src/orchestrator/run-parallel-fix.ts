@@ -180,7 +180,7 @@ async function executeFixInWorktree(
       return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, { status: "no-changes" });
     }
 
-    await commitFix(worktreePath, buildCommitMessage(cluster, agentName, options.models?.[agentName]));
+    await commitFix(worktreePath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.models));
     n("applied", { agent: agentName, branch, filesChanged });
 
     const fixerContext = extractFixerContext(result.rawOutput) ?? undefined;
@@ -300,6 +300,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
           const { item: retryItem, applied } = await executeParallelRetry({
             reviewer: action.reviewer,
             reviewerModel: options.models?.[action.reviewer],
+            scanModels: options.models,
             concern: action.concern,
             adapter: retryAdapter,
             worktreePath: item.worktreePath,

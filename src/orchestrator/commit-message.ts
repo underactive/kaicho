@@ -16,19 +16,32 @@ import type { SuggestionCluster } from "../dedup/index.js";
  *
  *   Applied by Kaichō via <agent>
  */
-export function buildCommitMessage(cluster: SuggestionCluster, agent: string, model?: string): string {
+export function buildCommitMessage(
+  cluster: SuggestionCluster,
+  agent: string,
+  model?: string,
+  scanModels?: Record<string, string>,
+): string {
   const location = cluster.line ? `${cluster.file}:${cluster.line}` : cluster.file;
 
   // Title: use summary if available, otherwise truncate first rationale
   const title = cluster.summary
     ?? truncate(cluster.rationales[0]?.rationale ?? "fix applied", 72);
 
+  const foundBy = cluster.agents
+    .map((a) => {
+      const display = a.charAt(0).toUpperCase() + a.slice(1);
+      const m = scanModels?.[a];
+      return m ? `${display} (${m})` : display;
+    })
+    .join(", ");
+
   const lines: string[] = [
     `fix(${cluster.id}): ${title}`,
     "",
     `File: ${location}`,
     `Severity: ${cluster.severity} | Category: ${cluster.category}`,
-    `Found by: ${cluster.agents.join(", ")} (${cluster.agreement}x agreement)`,
+    `Found by: ${foundBy}`,
   ];
 
   // Full rationale from each agent
