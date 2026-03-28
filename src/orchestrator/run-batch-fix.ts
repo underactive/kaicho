@@ -67,6 +67,7 @@ export interface BatchFixOptions {
   agent?: string;
   timeoutMs?: number;
   models?: Record<string, string>;
+  scanModels?: Record<string, string>;
   auto?: boolean;
   verbose?: boolean;
   onProgress?: (progress: BatchFixProgress) => void;
@@ -208,7 +209,7 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
       }
 
       // Commit this individual fix
-      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.models));
+      await commitFix(absRepoPath, buildCommitMessage(cluster, agentName, options.models?.[agentName], options.scanModels));
 
       const item: BatchFixItemResult = {
         clusterId: cluster.id,

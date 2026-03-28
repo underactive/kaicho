@@ -38,6 +38,7 @@ export async function handleParallelBatchFix(
       auto: isAuto,
       verbose: opts["verbose"] === true,
       models: config.fixModels ?? config.models,
+      scanModels: config.models,
       validate: doValidate,
       reviewer: (opts["reviewer"] as string | undefined) ?? config.reviewer,
       onProgress: (p) => {
