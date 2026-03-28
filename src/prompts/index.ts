@@ -3,5 +3,6 @@ export { buildSecurityScanPrompt } from "./security-scan.js";
 export { buildQaScanPrompt } from "./qa-scan.js";
 export { buildDocsScanPrompt } from "./docs-scan.js";
 export { buildContractsScanPrompt } from "./contracts-scan.js";
+export { buildStateScanPrompt } from "./state-scan.js";
 export { buildFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
 export { buildValidationPrompt, pickReviewer, type ValidationResult } from "./validate.js";
