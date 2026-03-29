@@ -55,6 +55,18 @@ export function scopeBlock(fileManifest?: string): string {
   return `\n\nSCOPE: Only review the following files. Do not review files outside this list.\n${fileManifest}\n`;
 }
 
+/**
+ * Compose repo context + file scope into a single prompt prelude block.
+ * Future prompt enrichment (git activity, custom context) should be added here
+ * so that individual prompt builders don't need signature changes.
+ */
+export function buildPromptPrelude(fileManifest?: string, repoContext?: string): string {
+  let prelude = "";
+  if (repoContext) prelude += `\n\n${repoContext}`;
+  if (fileManifest) prelude += `\n\nSCOPE: Only review the following files. Do not review files outside this list.\n${fileManifest}\n`;
+  return prelude;
+}
+
 export const OUTPUT_INSTRUCTION = `
 For each finding, provide:
 - file: the relative file path from the repository root

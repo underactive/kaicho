@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildTestingScanPrompt(fileManifest?: string): string {
-  return `You are reviewing a codebase for testing coverage and test quality issues — gaps where bugs can hide due to missing, weak, or unreliable tests.${scopeBlock(fileManifest)}
+export function buildTestingScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are reviewing a codebase for testing coverage and test quality issues — gaps where bugs can hide due to missing, weak, or unreliable tests.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on:
 - Missing tests — new public functions/modules without corresponding unit tests, modified branching logic without updated assertions, deleted tests not replaced, error paths with no test coverage

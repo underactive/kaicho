@@ -6,6 +6,7 @@ import { JsonStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt, buildTestingScanPrompt, buildDxScanPrompt } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
+import { fingerprint, formatRepoContext } from "../repo-context/index.js";
 import { summarizeClusters, saveEnrichedCache } from "../summarizer/index.js";
 import { log } from "../logger/index.js";
 import { resolveAdapter, ALL_AGENT_NAMES } from "./resolve-adapter.js";
@@ -39,7 +40,7 @@ export interface MultiScanResult {
   totalDurationMs: number;
 }
 
-const TASK_PROMPTS: Record<string, (fileManifest?: string) => string> = {
+const TASK_PROMPTS: Record<string, (fileManifest?: string, repoContext?: string) => string> = {
   security: buildSecurityScanPrompt,
   qa: buildQaScanPrompt,
   docs: buildDocsScanPrompt,
@@ -137,7 +138,22 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
     log("info", "Scoped scan", { fileCount: scopedFiles.length });
   }
 
-  const prompt = buildPrompt(fileManifest);
+  // Fingerprint the repo for prompt context (graceful degradation on failure)
+  let repoContextString: string | undefined;
+  try {
+    const ctx = await fingerprint(absRepoPath);
+    repoContextString = formatRepoContext(ctx) || undefined;
+    if (repoContextString) {
+      log("info", "Repo context detected", {
+        languages: ctx.languages.map((s) => s.name),
+        frameworks: ctx.frameworks.map((s) => s.name),
+      });
+    }
+  } catch (err) {
+    log("warn", "Repo context failed, continuing without", { error: String(err) });
+  }
+
+  const prompt = buildPrompt(fileManifest, repoContextString);
 
   // Agent selection: --agents (list) > all, then apply --exclude
   let agentsToRun: string[];

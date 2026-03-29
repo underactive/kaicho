@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildStateScanPrompt(fileManifest?: string): string {
-  return `You are reviewing a codebase for state management issues — bugs and design problems that arise from how application state is created, modified, observed, and shared.${scopeBlock(fileManifest)}
+export function buildStateScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are reviewing a codebase for state management issues — bugs and design problems that arise from how application state is created, modified, observed, and shared.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on:
 - Mutation discipline — shared state modified outside designated update paths, state transitions that skip validation, side effects hidden inside getters or read operations, direct mutation of state that should be immutable or copy-on-write

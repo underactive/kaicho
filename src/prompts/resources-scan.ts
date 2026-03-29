@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildResourcesScanPrompt(fileManifest?: string): string {
-  return `You are reviewing a codebase for resource management and concurrency issues — bugs that emerge from shared resources, parallel execution, timing assumptions, and hardware lifecycle.${scopeBlock(fileManifest)}
+export function buildResourcesScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are reviewing a codebase for resource management and concurrency issues — bugs that emerge from shared resources, parallel execution, timing assumptions, and hardware lifecycle.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on:
 - Concurrency — data races on shared memory, missing locks/mutexes/atomics around critical sections, deadlock potential from lock ordering, priority inversion in RTOS or threaded contexts, non-atomic read-modify-write sequences on shared state

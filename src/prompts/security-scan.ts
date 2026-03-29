@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildSecurityScanPrompt(fileManifest?: string): string {
-  return `You are a security auditor reviewing a codebase. Analyze the code in this repository for security vulnerabilities.${scopeBlock(fileManifest)}
+export function buildSecurityScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are a security auditor reviewing a codebase. Analyze the code in this repository for security vulnerabilities.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on (skip items that aren't relevant to the language):
 - Injection & input trust — unsanitized external input used in SQL queries, OS commands, file paths (path traversal), or output rendering (XSS); format-string vulnerabilities; template injection; untrusted data driving control flow (dynamic eval, reflection from user input)

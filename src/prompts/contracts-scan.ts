@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildContractsScanPrompt(fileManifest?: string): string {
-  return `You are reviewing a codebase for interface contract violations — bugs and vulnerabilities that emerge at the boundary between components, services, protocols, or APIs.${scopeBlock(fileManifest)}
+export function buildContractsScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are reviewing a codebase for interface contract violations — bugs and vulnerabilities that emerge at the boundary between components, services, protocols, or APIs.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on:
 - Data shape mismatches — caller assumptions that diverge from actual API/protocol schema, missing fields treated as present, incorrect type coercion or endianness, struct packing assumptions that differ from wire format

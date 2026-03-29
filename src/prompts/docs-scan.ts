@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildDocsScanPrompt(fileManifest?: string): string {
-  return `You are a documentation auditor reviewing a codebase. Analyze the code in this repository for documentation gaps and issues.${scopeBlock(fileManifest)}
+export function buildDocsScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are a documentation auditor reviewing a codebase. Analyze the code in this repository for documentation gaps and issues.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on:
 - Exported API documentation — exported functions, classes, and interfaces missing doc comments, public APIs with no usage examples or parameter descriptions, undocumented return types and thrown exceptions

@@ -32,7 +32,7 @@ cleanup and investment.
 | `branch`          | A     | Create/diff/commit/discard/reset + worktree lifecycle, 8 tests | 2026-03-27 |
 | `fix-log`         | A-    | Self-pruning fix + discarded fix log, no tests    | 2026-03-27    |
 | `summarizer`      | B+    | Ollama integration, graceful fallback, no tests  | 2026-03-26    |
-| `repo-context`    | —     | Not yet implemented (scoping partially covers)   | 2026-03-26    |
+| `repo-context`    | A     | Root-only fingerprint, format, 27 tests, graceful degradation | 2026-03-29 |
 
 ## Cross-cutting grades
 
@@ -40,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | A-    | 144 tests across 17 files, all critical domains covered | 2026-03-27 |
+| Test coverage     | A-    | 192 tests across 20 files, all critical domains covered | 2026-03-29 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process

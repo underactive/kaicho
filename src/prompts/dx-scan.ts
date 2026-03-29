@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildDxScanPrompt(fileManifest?: string): string {
-  return `You are reviewing a codebase for developer experience and maintainability issues — problems that slow down future development, obscure intent, or accumulate technical debt.${scopeBlock(fileManifest)}
+export function buildDxScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are reviewing a codebase for developer experience and maintainability issues — problems that slow down future development, obscure intent, or accumulate technical debt.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on:
 - Readability — functions exceeding ~50 lines, boolean parameters without named constants, magic numbers/strings without explanation, nested ternaries or conditionals deeper than one level, complex expressions that should be extracted to named variables

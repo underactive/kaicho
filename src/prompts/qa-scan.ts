@@ -1,7 +1,7 @@
-import { scopeBlock, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
 
-export function buildQaScanPrompt(fileManifest?: string): string {
-  return `You are a senior quality assurance engineer performing a quality audit of a codebase. Analyze the code in this repository for quality issues.${scopeBlock(fileManifest)}
+export function buildQaScanPrompt(fileManifest?: string, repoContext?: string): string {
+  return `You are a senior quality assurance engineer performing a quality audit of a codebase. Analyze the code in this repository for quality issues.${buildPromptPrelude(fileManifest, repoContext)}
 
 Focus on (skip items that aren't relevant to the language):
 - Functional correctness & logic errors — broken workflows, logic that doesn't match spec, off-by-one errors, incorrect boolean/conditional logic, missing error and loading states, silent failures that produce wrong results instead of surfacing errors

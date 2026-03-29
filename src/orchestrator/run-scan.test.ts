@@ -42,6 +42,20 @@ vi.mock("../summarizer/index.js", () => ({
   saveEnrichedCache: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../repo-context/index.js", () => ({
+  fingerprint: vi.fn().mockResolvedValue({
+    languages: [],
+    frameworks: [],
+    testRunners: [],
+    linters: [],
+    entryPoints: [],
+    packageManager: null,
+    monorepoTool: null,
+    architectureDocs: [],
+  }),
+  formatRepoContext: vi.fn().mockReturnValue(""),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -133,5 +147,105 @@ describe("runScan", () => {
 
     const claude = result.results.find((r) => r.agent === "claude");
     expect(claude?.status).toBe("skipped");
+  });
+});
+
+describe("repo-context integration", () => {
+  it("includes PROJECT CONTEXT in prompt when fingerprint succeeds", async () => {
+    const { fingerprint, formatRepoContext } = await import("../repo-context/index.js");
+    vi.mocked(fingerprint).mockResolvedValue({
+      languages: [{ name: "TypeScript", source: "tsconfig.json" }],
+      frameworks: [{ name: "Next.js", source: "package.json" }],
+      testRunners: [],
+      linters: [],
+      entryPoints: [],
+      packageManager: null,
+      monorepoTool: null,
+      architectureDocs: [],
+    });
+    vi.mocked(formatRepoContext).mockReturnValue(
+      "PROJECT CONTEXT (best-effort repo-level hints — may be incomplete or outdated):\n- Languages: TypeScript\n- Frameworks: Next.js",
+    );
+
+    const { ClaudeAdapter } = await import("../agent-adapters/index.js");
+    const mockRun = vi.fn().mockResolvedValue({
+      agent: "claude",
+      status: "success",
+      suggestions: [],
+      rawOutput: "",
+      rawError: "",
+      durationMs: 100,
+      startedAt: new Date().toISOString(),
+    });
+    vi.mocked(ClaudeAdapter).mockImplementation(() => ({
+      config: { name: "claude", command: "claude", timeoutMs: 300000 },
+      isAvailable: vi.fn().mockResolvedValue(true),
+      run: mockRun,
+    }) as never);
+
+    await runScan({
+      agents: ["claude"],
+      task: "security",
+      repoPath: "/test/repo",
+    });
+
+    const prompt = mockRun.mock.calls[0]?.[1] as string;
+    expect(prompt).toContain("PROJECT CONTEXT");
+    expect(prompt).toContain("TypeScript");
+    expect(prompt).toContain("Next.js");
+  });
+
+  it("omits context when fingerprint returns empty context", async () => {
+    const { fingerprint, formatRepoContext } = await import("../repo-context/index.js");
+    vi.mocked(fingerprint).mockResolvedValue({
+      languages: [],
+      frameworks: [],
+      testRunners: [],
+      linters: [],
+      entryPoints: [],
+      packageManager: null,
+      monorepoTool: null,
+      architectureDocs: [],
+    });
+    vi.mocked(formatRepoContext).mockReturnValue("");
+
+    const { ClaudeAdapter } = await import("../agent-adapters/index.js");
+    const mockRun = vi.fn().mockResolvedValue({
+      agent: "claude",
+      status: "success",
+      suggestions: [],
+      rawOutput: "",
+      rawError: "",
+      durationMs: 100,
+      startedAt: new Date().toISOString(),
+    });
+    vi.mocked(ClaudeAdapter).mockImplementation(() => ({
+      config: { name: "claude", command: "claude", timeoutMs: 300000 },
+      isAvailable: vi.fn().mockResolvedValue(true),
+      run: mockRun,
+    }) as never);
+
+    await runScan({
+      agents: ["claude"],
+      task: "security",
+      repoPath: "/test/repo",
+    });
+
+    const prompt = mockRun.mock.calls[0]?.[1] as string;
+    expect(prompt).not.toContain("PROJECT CONTEXT");
+  });
+
+  it("continues scan when fingerprint throws", async () => {
+    const { fingerprint } = await import("../repo-context/index.js");
+    vi.mocked(fingerprint).mockRejectedValue(new Error("disk on fire"));
+
+    const result = await runScan({
+      task: "security",
+      repoPath: "/test/repo",
+    });
+
+    // Scan should succeed despite fingerprint failure
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results.every((r) => r.status === "success" || r.status === "skipped")).toBe(true);
   });
 });

@@ -93,7 +93,7 @@ single **Providers** interface. Domains never import cross-cutting code directly
 | `prompts`         | 8 scan tasks + fix/retry/validate prompts          | Implemented |
 | `logger`          | Structured JSON logging to stderr                 | Implemented |
 | `cli`             | 6 commands, 2 formatters, progress callbacks      | Implemented |
-| `repo-context`    | Worktree-based parallel scans (beyond fix)         | Not started |
+| `repo-context`    | Project metadata fingerprinting for prompt enrichment | Implemented |
 
 ## Key design decisions
 
