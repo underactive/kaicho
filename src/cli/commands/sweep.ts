@@ -15,7 +15,7 @@ export const sweepCommand = new Command("sweep")
   .option("--timeout <ms>", "Agent timeout in milliseconds")
   .option("--validate", "Cross-agent validation on fixes")
   .option("--reviewer <agent>", "Reviewer agent for validation")
-  .option("--concurrency <n>", "Parallel fix concurrency", "3")
+  .option("--concurrency <n>", "Parallel fix concurrency")
   .option("--verbose", "Show detailed output")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;
@@ -77,7 +77,7 @@ export const sweepCommand = new Command("sweep")
       timeoutMs: opts.timeout ? parseInt(opts.timeout as string, 10) : DEFAULT_TIMEOUT_MS,
       models: config.models,
       scanModels: config.models,
-      concurrency: opts.concurrency ? parseInt(opts.concurrency as string, 10) : 3,
+      concurrency: opts.concurrency ? parseInt(opts.concurrency as string, 10) : config.concurrency ?? 3,
       validate: opts.validate === true,
       reviewer: opts.reviewer as string | undefined ?? config.reviewer,
       verbose: opts.verbose === true,

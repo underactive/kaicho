@@ -175,6 +175,7 @@ Create per-repo config with `kaicho init`, or create the global config manually:
     "codex": "o3"
   },
   "reviewer": "claude",
+  "concurrency": 3,
   "retention": 3,
   "summarizerModel": "gemma3:1b",
   "maxSweepRounds": 3

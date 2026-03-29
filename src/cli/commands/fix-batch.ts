@@ -25,8 +25,9 @@ export async function handleParallelBatchFix(
     ? path.join(os.homedir(), rawRepo.slice(1))
     : path.resolve(rawRepo);
   const config = await loadConfig(repoPath);
+  const concurrency = config.concurrency ?? 3;
 
-  out.write(`\n  Parallel fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"} (up to 3 concurrent)${isAuto ? " (auto)" : ""}${doValidate ? " + validation" : ""}...\n\n`);
+  out.write(`\n  Parallel fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"} (up to ${concurrency} concurrent)${isAuto ? " (auto)" : ""}${doValidate ? " + validation" : ""}...\n\n`);
 
   try {
     const result = await runBatchedFix({
@@ -34,7 +35,7 @@ export async function handleParallelBatchFix(
       clusters,
       agent: opts["agent"] as string | undefined,
       timeoutMs: parseInt((opts["timeout"] as string) ?? "1800000", 10),
-      concurrency: 3,
+      concurrency,
       auto: isAuto,
       verbose: opts["verbose"] === true,
       models: config.fixModels ?? config.models,

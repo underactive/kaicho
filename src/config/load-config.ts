@@ -18,6 +18,7 @@ export interface KaichoConfig {
   models?: Record<string, string>;
   fixModels?: Record<string, string>;
   reviewer?: string;
+  concurrency?: number;
   retention?: number;
   summarizerModel?: string;
   maxSweepRounds?: number;
@@ -68,6 +69,7 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
       models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
       fixModels: isModelsMap(raw["fixModels"]) ? raw["fixModels"] : undefined,
       reviewer: str(raw["reviewer"]),
+      concurrency: num(raw["concurrency"]),
       retention: num(raw["retention"]),
       summarizerModel: str(raw["summarizerModel"]),
       maxSweepRounds: num(raw["maxSweepRounds"]),

@@ -51,6 +51,11 @@
       "type": "string",
       "description": "Default agent for --validate reviews (e.g. \"claude\")"
     },
+    "concurrency": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of parallel fix agents to run concurrently (default: 3)"
+    },
     "retention": {
       "type": "integer",
       "minimum": 1,
