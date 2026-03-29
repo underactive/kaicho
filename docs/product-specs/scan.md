@@ -21,6 +21,10 @@ deduplicated report so I can find issues faster and with higher confidence.
 - Loads defaults from `kaicho.config.json` if present; CLI flags override
 - Exits 0 if any agent succeeds, 1 if all fail
 - Expands `~` in `--repo` path
+- Automatically fingerprints the target repo (language, framework, test runner,
+  linters, entry points, package manager, monorepo signals, architecture docs)
+  and injects best-effort project context into every agent prompt
+- Repo fingerprinting is root-only (v1) and degrades gracefully on failure
 
 ## Edge cases
 

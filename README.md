@@ -164,7 +164,7 @@ CLI flags override config values.
 
 ## How it works
 
-1. **Scan** — Spawns each agent CLI as a subprocess with structured output flags. Agents run in parallel.
+1. **Scan** — Fingerprints the target repo (language, framework, test runner, linters, etc.) and injects best-effort project context into the prompt. Spawns each agent CLI as a subprocess with structured output flags. Agents run in parallel.
 2. **Parse** — Agent output is extracted via JSON schema enforcement (Claude, Codex) or text parsing (Cursor, Gemini). Every suggestion is validated with Zod.
 3. **Cluster** — Suggestions are grouped by file + line proximity (±5 lines), then merged by rationale keyword similarity. Cross-agent agreement surfaces first.
 4. **Enrich** — If Ollama is running, each cluster gets a one-line LLM summary. Cached per-task.
