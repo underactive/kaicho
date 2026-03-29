@@ -15,6 +15,7 @@ export interface RepoContext {
   packageManager: string | null;
   monorepoTool: string | null;
   architectureDocs: string[];
+  workspacePackages: string[];
 }
 
 function emptyContext(): RepoContext {
@@ -27,6 +28,7 @@ function emptyContext(): RepoContext {
     packageManager: null,
     monorepoTool: null,
     architectureDocs: [],
+    workspacePackages: [],
   };
 }
 
@@ -58,7 +60,7 @@ interface PackageJson {
   devDependencies?: Record<string, string>;
 }
 
-function detectFromPackageJson(raw: string, ctx: RepoContext): void {
+function detectFromPackageJson(raw: string, ctx: RepoContext, source = "package.json"): void {
   let pkg: PackageJson;
   try {
     pkg = JSON.parse(raw) as PackageJson;
@@ -66,7 +68,7 @@ function detectFromPackageJson(raw: string, ctx: RepoContext): void {
     return;
   }
 
-  const src = "package.json";
+  const src = source;
   const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
 
   ctx.languages.push({ name: "JavaScript", source: src });
@@ -156,8 +158,8 @@ function detectFromGoMod(raw: string, ctx: RepoContext): void {
   }
 }
 
-function detectFromCargoToml(raw: string, ctx: RepoContext): void {
-  const src = "Cargo.toml";
+function detectFromCargoToml(raw: string, ctx: RepoContext, source = "Cargo.toml"): void {
+  const src = source;
   ctx.languages.push({ name: "Rust", source: src });
 
   // Detect [[bin]] entry points
@@ -172,8 +174,8 @@ function detectFromCargoToml(raw: string, ctx: RepoContext): void {
   }
 }
 
-function detectFromPyprojectToml(raw: string, ctx: RepoContext): void {
-  const src = "pyproject.toml";
+function detectFromPyprojectToml(raw: string, ctx: RepoContext, source = "pyproject.toml"): void {
+  const src = source;
   ctx.languages.push({ name: "Python", source: src });
 
   // Test runners — match section headers with optional whitespace
@@ -259,13 +261,125 @@ const MONOREPO_FILES: Record<string, string> = {
   "lerna.json": "lerna",
 };
 
+// --- Workspace resolution ---
+
+const MAX_WORKSPACE_PACKAGES = 20;
+
+/**
+ * Extract workspace glob patterns from the monorepo config.
+ */
+function extractWorkspacePatterns(
+  monorepoTool: string,
+  packageJsonRaw: string | null,
+  cargoTomlRaw: string | null,
+  pnpmWorkspaceRaw: string | null,
+  lernaJsonRaw: string | null,
+): string[] {
+  if (monorepoTool === "npm workspaces" && packageJsonRaw) {
+    try {
+      const pkg = JSON.parse(packageJsonRaw) as PackageJson;
+      if (Array.isArray(pkg.workspaces)) return pkg.workspaces;
+      if (pkg.workspaces && Array.isArray((pkg.workspaces as { packages: string[] }).packages)) {
+        return (pkg.workspaces as { packages: string[] }).packages;
+      }
+    } catch { /* skip */ }
+  }
+
+  if (monorepoTool === "pnpm workspaces" && pnpmWorkspaceRaw) {
+    // Simple regex parse: lines after "packages:" starting with "- "
+    const lines = pnpmWorkspaceRaw.split("\n");
+    const patterns: string[] = [];
+    let inPackages = false;
+    for (const line of lines) {
+      if (/^packages\s*:/i.test(line)) { inPackages = true; continue; }
+      if (inPackages) {
+        const match = line.match(/^\s*-\s*['"]?([^'"#\s]+)['"]?\s*/);
+        if (match?.[1]) {
+          patterns.push(match[1]);
+        } else if (/^\S/.test(line)) {
+          break; // New top-level key
+        }
+      }
+    }
+    return patterns;
+  }
+
+  if (monorepoTool === "lerna" && lernaJsonRaw) {
+    try {
+      const lerna = JSON.parse(lernaJsonRaw) as { packages?: string[] };
+      if (Array.isArray(lerna.packages)) return lerna.packages;
+    } catch { /* skip */ }
+    return ["packages/*"]; // Lerna default
+  }
+
+  if (monorepoTool === "cargo workspaces" && cargoTomlRaw) {
+    const membersMatch = cargoTomlRaw.match(/\[workspace]\s*\n[\s\S]*?members\s*=\s*\[([^\]]*)\]/m);
+    if (membersMatch?.[1]) {
+      return membersMatch[1].match(/"([^"]+)"/g)?.map((s) => s.replace(/"/g, "")) ?? [];
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Resolve workspace glob patterns to actual directories.
+ * Supports simple `dir/*` patterns via fs.readdir. Literal paths checked directly.
+ */
+async function resolveWorkspacePaths(root: string, patterns: string[]): Promise<string[]> {
+  const results: string[] = [];
+
+  for (const pattern of patterns) {
+    if (pattern.endsWith("/*")) {
+      // Glob: list parent directory, filter for dirs with a manifest
+      const parent = path.join(root, pattern.slice(0, -2));
+      try {
+        const entries = await fs.readdir(parent, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          if (entry.name.startsWith(".")) continue;
+          results.push(path.join(parent, entry.name));
+          if (results.length >= MAX_WORKSPACE_PACKAGES) return results;
+        }
+      } catch {
+        // Parent doesn't exist, skip
+      }
+    } else {
+      // Literal path
+      const dir = path.join(root, pattern);
+      if (await exists(dir)) {
+        results.push(dir);
+        if (results.length >= MAX_WORKSPACE_PACKAGES) return results;
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Fingerprint a single workspace package by reading its manifest.
+ */
+async function fingerprintPackage(pkgPath: string, root: string, ctx: RepoContext): Promise<void> {
+  const rel = path.relative(root, pkgPath);
+
+  // Try each manifest type concurrently
+  const [pkgJson, cargoToml, pyproject] = await Promise.all([
+    readSafe(path.join(pkgPath, "package.json")),
+    readSafe(path.join(pkgPath, "Cargo.toml")),
+    readSafe(path.join(pkgPath, "pyproject.toml")),
+  ]);
+
+  if (pkgJson) detectFromPackageJson(pkgJson, ctx, `${rel}/package.json`);
+  if (cargoToml) detectFromCargoToml(cargoToml, ctx, `${rel}/Cargo.toml`);
+  if (pyproject) detectFromPyprojectToml(pyproject, ctx, `${rel}/pyproject.toml`);
+}
+
 // --- Main fingerprint function ---
 
 /**
- * Fingerprint a repository by reading signal files from its root.
- *
- * v1 scope: root-only. Does not descend into nested package roots
- * or monorepo workspace packages.
+ * Fingerprint a repository by reading signal files from its root
+ * and workspace packages (if a monorepo is detected).
  */
 export async function fingerprint(repoPath: string): Promise<RepoContext> {
   const ctx = emptyContext();
@@ -327,6 +441,26 @@ export async function fingerprint(repoPath: string): Promise<RepoContext> {
   }
 
   await Promise.all(allChecks);
+
+  // Phase 3: Fingerprint workspace packages (if monorepo detected)
+  if (ctx.monorepoTool) {
+    const pnpmWorkspaceRaw = ctx.monorepoTool === "pnpm workspaces"
+      ? await readSafe(path.join(root, "pnpm-workspace.yaml"))
+      : null;
+    const lernaJsonRaw = ctx.monorepoTool === "lerna"
+      ? await readSafe(path.join(root, "lerna.json"))
+      : null;
+
+    const patterns = extractWorkspacePatterns(
+      ctx.monorepoTool, packageJsonRaw, cargoTomlRaw, pnpmWorkspaceRaw, lernaJsonRaw,
+    );
+
+    if (patterns.length > 0) {
+      const pkgPaths = await resolveWorkspacePaths(root, patterns);
+      ctx.workspacePackages = pkgPaths.map((p) => path.relative(root, p));
+      await Promise.all(pkgPaths.map((p) => fingerprintPackage(p, root, ctx)));
+    }
+  }
 
   // Deduplicate signals (config file + package.json may both detect eslint)
   ctx.languages = dedup(ctx.languages);

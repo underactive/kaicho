@@ -30,6 +30,14 @@ export function formatRepoContext(ctx: RepoContext): string {
   if (ctx.monorepoTool) {
     lines.push(`- Monorepo: ${ctx.monorepoTool}`);
   }
+  if (ctx.workspacePackages.length > 0) {
+    const MAX_DISPLAY = 10;
+    const shown = ctx.workspacePackages.slice(0, MAX_DISPLAY);
+    const suffix = ctx.workspacePackages.length > MAX_DISPLAY
+      ? ` (+${ctx.workspacePackages.length - MAX_DISPLAY} more)`
+      : "";
+    lines.push(`- Workspace packages: ${shown.join(", ")}${suffix}`);
+  }
   if (ctx.architectureDocs.length > 0) {
     lines.push(`- Architecture docs: ${ctx.architectureDocs.join(", ")}`);
   }

@@ -12,6 +12,7 @@ function emptyContext(): RepoContext {
     packageManager: null,
     monorepoTool: null,
     architectureDocs: [],
+    workspacePackages: [],
   };
 }
 
@@ -36,6 +37,7 @@ describe("formatRepoContext", () => {
       packageManager: "pnpm",
       monorepoTool: "pnpm workspaces",
       architectureDocs: ["CLAUDE.md", "README.md"],
+      workspacePackages: ["packages/web", "packages/api"],
     };
 
     const result = formatRepoContext(ctx);
@@ -50,6 +52,7 @@ describe("formatRepoContext", () => {
     expect(result).toContain("- Package manager: pnpm");
     expect(result).toContain("- Monorepo: pnpm workspaces");
     expect(result).toContain("- Architecture docs: CLAUDE.md, README.md");
+    expect(result).toContain("- Workspace packages: packages/web, packages/api");
   });
 
   it("only includes lines for populated fields", () => {

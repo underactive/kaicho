@@ -4,16 +4,19 @@ import { fingerprint } from "./fingerprint.js";
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
   access: vi.fn(),
+  readdir: vi.fn(),
 }));
 
 import * as fs from "node:fs/promises";
 
 const mockReadFile = vi.mocked(fs.readFile);
 const mockAccess = vi.mocked(fs.access);
+const mockReaddir = vi.mocked(fs.readdir);
 
 function failAll(): void {
   mockReadFile.mockRejectedValue(new Error("ENOENT"));
   mockAccess.mockRejectedValue(new Error("ENOENT"));
+  mockReaddir.mockRejectedValue(new Error("ENOENT"));
 }
 
 function allowAccess(...filenames: string[]): void {
@@ -54,6 +57,7 @@ describe("fingerprint", () => {
     expect(ctx.packageManager).toBeNull();
     expect(ctx.monorepoTool).toBeNull();
     expect(ctx.architectureDocs).toEqual([]);
+    expect(ctx.workspacePackages).toEqual([]);
   });
 
   it("detects Node.js project with Next.js, vitest, eslint", async () => {
@@ -301,5 +305,223 @@ strict = true
   it("never throws even when all reads fail", async () => {
     // failAll() is already set in beforeEach
     await expect(fingerprint("/broken")).resolves.toBeDefined();
+  });
+});
+
+describe("workspace fingerprinting", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function makeDirent(name: string, isDir: boolean): any {
+    return { name, isDirectory: () => isDir, isFile: () => !isDir };
+  }
+
+  it("fingerprints npm workspace packages", async () => {
+    // Root package.json with workspaces
+    const rootPkg = JSON.stringify({
+      workspaces: ["packages/*"],
+      devDependencies: { eslint: "8.0.0" },
+    });
+    // Child package with React
+    const webPkg = JSON.stringify({
+      dependencies: { react: "18.0.0", next: "14.0.0" },
+    });
+    // Child package with Express
+    const apiPkg = JSON.stringify({
+      dependencies: { express: "4.0.0" },
+    });
+
+    serveFile("package.json", rootPkg);
+    serveFile("packages/web/package.json", webPkg);
+    serveFile("packages/api/package.json", apiPkg);
+
+    // readdir for packages/ directory
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/packages")) {
+        return Promise.resolve([
+          makeDirent("web", true),
+          makeDirent("api", true),
+        ]) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    // Allow access checks for workspace dirs
+    mockAccess.mockImplementation((p) => {
+      const s = String(p);
+      if (s.endsWith("/packages/web") || s.endsWith("/packages/api")) {
+        return Promise.resolve();
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.monorepoTool).toBe("npm workspaces");
+    expect(ctx.workspacePackages).toEqual(["packages/web", "packages/api"]);
+    expect(ctx.frameworks.map((s) => s.name)).toContain("Next.js");
+    expect(ctx.frameworks.map((s) => s.name)).toContain("React");
+    expect(ctx.frameworks.map((s) => s.name)).toContain("Express");
+    // Source should reference the nested path
+    const nextSignal = ctx.frameworks.find((s) => s.name === "Next.js");
+    expect(nextSignal?.source).toBe("packages/web/package.json");
+  });
+
+  it("fingerprints pnpm workspace packages", async () => {
+    const pnpmYaml = "packages:\n  - 'apps/*'\n  - 'libs/*'\n";
+    const appPkg = JSON.stringify({ dependencies: { vue: "3.0.0" } });
+
+    serveFile("pnpm-workspace.yaml", pnpmYaml);
+    serveFile("apps/frontend/package.json", appPkg);
+    allowAccess("pnpm-workspace.yaml");
+
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/apps")) {
+        return Promise.resolve([makeDirent("frontend", true)]) as ReturnType<typeof fs.readdir>;
+      }
+      if (String(p).endsWith("/libs")) {
+        return Promise.reject(new Error("ENOENT")); // libs/ doesn't exist
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.monorepoTool).toBe("pnpm workspaces");
+    expect(ctx.workspacePackages).toContain("apps/frontend");
+    expect(ctx.frameworks.map((s) => s.name)).toContain("Vue");
+  });
+
+  it("fingerprints lerna workspace packages", async () => {
+    const lernaJson = JSON.stringify({ packages: ["modules/*"] });
+    const childPkg = JSON.stringify({ dependencies: { fastify: "4.0.0" } });
+
+    serveFile("lerna.json", lernaJson);
+    serveFile("modules/server/package.json", childPkg);
+    allowAccess("lerna.json");
+
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/modules")) {
+        return Promise.resolve([makeDirent("server", true)]) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.monorepoTool).toBe("lerna");
+    expect(ctx.workspacePackages).toContain("modules/server");
+    expect(ctx.frameworks.map((s) => s.name)).toContain("Fastify");
+  });
+
+  it("fingerprints cargo workspace members", async () => {
+    const rootCargo = `[workspace]\nmembers = ["crates/*"]\n`;
+    const childCargo = `[package]\nname = "my-lib"\nversion = "0.1.0"\n`;
+
+    serveFile("Cargo.toml", rootCargo);
+    serveFile("crates/my-lib/Cargo.toml", childCargo);
+
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/crates")) {
+        return Promise.resolve([makeDirent("my-lib", true)]) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.monorepoTool).toBe("cargo workspaces");
+    expect(ctx.workspacePackages).toContain("crates/my-lib");
+    // Child Cargo.toml adds Rust language signal with nested source
+    const rustSignals = ctx.languages.filter((s) => s.name === "Rust");
+    expect(rustSignals.length).toBe(1); // Deduped
+  });
+
+  it("handles npm workspaces with {packages} object format", async () => {
+    const rootPkg = JSON.stringify({
+      workspaces: { packages: ["packages/*"] },
+      devDependencies: {},
+    });
+    const childPkg = JSON.stringify({ dependencies: { svelte: "4.0.0" } });
+
+    serveFile("package.json", rootPkg);
+    serveFile("packages/app/package.json", childPkg);
+
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/packages")) {
+        return Promise.resolve([makeDirent("app", true)]) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.workspacePackages).toContain("packages/app");
+    expect(ctx.frameworks.map((s) => s.name)).toContain("Svelte");
+  });
+
+  it("caps workspace packages at 20", async () => {
+    const rootPkg = JSON.stringify({
+      workspaces: ["packages/*"],
+      devDependencies: {},
+    });
+    serveFile("package.json", rootPkg);
+
+    // Create 25 workspace dirs
+    const entries = Array.from({ length: 25 }, (_, i) =>
+      makeDirent(`pkg-${i}`, true),
+    );
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/packages")) {
+        return Promise.resolve(entries) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.workspacePackages.length).toBe(20);
+  });
+
+  it("skips hidden directories in workspace glob", async () => {
+    const rootPkg = JSON.stringify({
+      workspaces: ["packages/*"],
+      devDependencies: {},
+    });
+    serveFile("package.json", rootPkg);
+
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/packages")) {
+        return Promise.resolve([
+          makeDirent(".hidden", true),
+          makeDirent("visible", true),
+        ]) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.workspacePackages).toEqual(["packages/visible"]);
+    expect(ctx.workspacePackages).not.toContain("packages/.hidden");
+  });
+
+  it("handles pnpm-workspace.yaml with unquoted patterns", async () => {
+    const pnpmYaml = "packages:\n  - packages/*\n  - tools/*\n";
+    serveFile("pnpm-workspace.yaml", pnpmYaml);
+    allowAccess("pnpm-workspace.yaml");
+
+    mockReaddir.mockImplementation((p) => {
+      if (String(p).endsWith("/packages")) {
+        return Promise.resolve([makeDirent("ui", true)]) as ReturnType<typeof fs.readdir>;
+      }
+      if (String(p).endsWith("/tools")) {
+        return Promise.resolve([makeDirent("cli", true)]) as ReturnType<typeof fs.readdir>;
+      }
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    const ctx = await fingerprint("/repo");
+
+    expect(ctx.workspacePackages).toContain("packages/ui");
+    expect(ctx.workspacePackages).toContain("tools/cli");
   });
 });

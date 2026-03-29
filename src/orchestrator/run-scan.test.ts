@@ -52,6 +52,7 @@ vi.mock("../repo-context/index.js", () => ({
     packageManager: null,
     monorepoTool: null,
     architectureDocs: [],
+    workspacePackages: [],
   }),
   formatRepoContext: vi.fn().mockReturnValue(""),
 }));
@@ -162,6 +163,7 @@ describe("repo-context integration", () => {
       packageManager: null,
       monorepoTool: null,
       architectureDocs: [],
+      workspacePackages: [],
     });
     vi.mocked(formatRepoContext).mockReturnValue(
       "PROJECT CONTEXT (best-effort repo-level hints — may be incomplete or outdated):\n- Languages: TypeScript\n- Frameworks: Next.js",
@@ -206,6 +208,7 @@ describe("repo-context integration", () => {
       packageManager: null,
       monorepoTool: null,
       architectureDocs: [],
+      workspacePackages: [],
     });
     vi.mocked(formatRepoContext).mockReturnValue("");
 
