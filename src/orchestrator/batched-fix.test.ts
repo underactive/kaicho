@@ -220,4 +220,41 @@ describe("runBatchedFix", () => {
     expect(result.keptBranches).toEqual([]);
     expect(mockRunParallelFix).not.toHaveBeenCalled();
   });
+
+  it("gates serial fixes until all parallel batches are exhausted", async () => {
+    mockMergeBranch.mockResolvedValue(undefined);
+
+    // 3 disjoint files + 2 that conflict via secondary touches
+    const clusters = [
+      makeCluster("a", "src/a.ts"),
+      makeCluster("b", "src/b.ts"),
+      makeCluster("c", "src/c.ts"),
+      makeCluster("d", "src/d.ts"), // will conflict after merge reveals a.ts touches d.ts
+      makeCluster("e", "src/e.ts"), // will conflict after merge reveals b.ts touches e.ts
+    ];
+
+    const batchClusters: string[][] = [];
+    mockRunParallelFix.mockImplementation(async (opts: { clusters: SuggestionCluster[] }) => {
+      const ids = opts.clusters.map((c: SuggestionCluster) => c.id);
+      batchClusters.push(ids);
+      return makeParallelResult(ids.map((id) => `br-${id}`));
+    });
+
+    // After merging parallel batch, reveal secondary file touches
+    mockGetChangedFiles
+      .mockResolvedValueOnce(["src/a.ts", "src/d.ts"])  // merge br-a touches d.ts
+      .mockResolvedValueOnce(["src/b.ts", "src/e.ts"])  // merge br-b touches e.ts
+      .mockResolvedValueOnce(["src/c.ts"])               // merge br-c clean
+      .mockResolvedValue([]);                            // serial merges
+
+    await runBatchedFix({ repoPath: "/repo", clusters, auto: true, concurrency: 3 });
+
+    // Phase 1: batch 1 = [a, b, c] (all disjoint)
+    // Phase 1 ends: d and e both conflict with touchedFiles
+    // Phase 2: batch 2 = [d] (serial), batch 3 = [e] (serial)
+    expect(batchClusters[0]).toEqual(["a", "b", "c"]);
+    expect(batchClusters[1]).toEqual(["d"]);
+    expect(batchClusters[2]).toEqual(["e"]);
+    expect(mockRunParallelFix).toHaveBeenCalledTimes(3);
+  });
 });

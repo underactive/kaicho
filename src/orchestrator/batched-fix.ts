@@ -51,11 +51,15 @@ export interface BatchedFixResult {
 /**
  * Build the next file-disjoint batch from remaining clusters.
  * Respects both intra-batch file conflicts and files touched by prior batches.
+ *
+ * When `allowSerial` is false, returns an empty batch if no file-disjoint
+ * grouping is possible — the caller decides when to transition to serial.
  */
 function buildBatch(
   remaining: SuggestionCluster[],
   touchedFiles: Set<string>,
   concurrency: number,
+  allowSerial: boolean,
 ): { batch: SuggestionCluster[]; deferred: SuggestionCluster[] } {
   const batch: SuggestionCluster[] = [];
   const batchFiles = new Set<string>();
@@ -75,8 +79,8 @@ function buildBatch(
     }
   }
 
-  // Serial fallback: all remaining share files with touchedFiles
-  if (batch.length === 0 && deferred.length > 0) {
+  // Serial fallback: only when caller permits (phase 2)
+  if (batch.length === 0 && deferred.length > 0 && allowSerial) {
     batch.push(deferred.shift()!);
   }
 
@@ -117,37 +121,33 @@ async function mergeAndRecord(
 }
 
 /**
- * Run fixes in file-disjoint batches with informed grouping.
- *
- * Groups clusters so no two in the same batch touch the same file,
- * runs each batch in parallel (using worktrees), then merges kept
- * branches before starting the next batch. After each merge, the
- * actual files changed are recorded so subsequent batches avoid
- * files modified by earlier fixes.
+ * Run a sequence of batches, returning the batch counter for continuity.
+ * Shared logic for both parallel-only and serial-allowed phases.
  */
-export async function runBatchedFix(options: BatchedFixOptions): Promise<BatchedFixResult> {
-  const concurrency = options.concurrency ?? 3;
-  const startMs = Date.now();
-  const touchedFiles = new Set<string>();
-  const allItems: ParallelFixItemResult[] = [];
-  const allKeptBranches: string[] = [];
-  let remaining = [...options.clusters];
-  let batchNum = 0;
-
+async function runBatchLoop(
+  options: BatchedFixOptions,
+  remaining: SuggestionCluster[],
+  touchedFiles: Set<string>,
+  allItems: ParallelFixItemResult[],
+  allKeptBranches: string[],
+  concurrency: number,
+  batchNum: number,
+  allowSerial: boolean,
+): Promise<{ remaining: SuggestionCluster[]; batchNum: number }> {
   while (remaining.length > 0) {
     batchNum++;
-    const { batch, deferred } = buildBatch(remaining, touchedFiles, concurrency);
+    const { batch, deferred } = buildBatch(remaining, touchedFiles, concurrency, allowSerial);
 
     if (batch.length === 0) break;
 
     log("info", "Running fix batch", {
       batch: batchNum,
+      phase: allowSerial ? "serial" : "parallel",
       size: batch.length,
       remaining: deferred.length,
       touchedFiles: touchedFiles.size,
     });
 
-    // Run this batch with existing parallel worktree infra
     const batchResult: ParallelFixResult = await runParallelFix({
       repoPath: options.repoPath,
       clusters: batch,
@@ -166,13 +166,58 @@ export async function runBatchedFix(options: BatchedFixOptions): Promise<Batched
 
     allItems.push(...batchResult.items);
 
-    // Merge kept branches into current branch, recording touched files
     const merged = await mergeAndRecord(
       options.repoPath, batchResult.keptBranches, touchedFiles,
     );
     allKeptBranches.push(...merged);
 
     remaining = deferred;
+  }
+
+  return { remaining, batchNum };
+}
+
+/**
+ * Run fixes in file-disjoint batches with informed grouping.
+ *
+ * Two-phase execution prevents branch drift:
+ *
+ * **Phase 1 — Parallel only.** Build file-disjoint batches and run them
+ * concurrently in worktrees. After each batch, squash-merge kept branches
+ * and record touched files. Repeat until no more disjoint batches can be
+ * formed. No serial fallback occurs in this phase.
+ *
+ * **Phase 2 — Serial + parallel.** Process remaining clusters (which all
+ * conflict with previously touched files). Allows serial fallback so
+ * clusters run one-at-a-time. After each merge, re-checks for new
+ * parallel opportunities.
+ */
+export async function runBatchedFix(options: BatchedFixOptions): Promise<BatchedFixResult> {
+  const concurrency = options.concurrency ?? 3;
+  const startMs = Date.now();
+  const touchedFiles = new Set<string>();
+  const allItems: ParallelFixItemResult[] = [];
+  const allKeptBranches: string[] = [];
+  let remaining = [...options.clusters];
+
+  // Phase 1: exhaust all file-disjoint parallel batches (no serial fallback)
+  let { remaining: afterParallel, batchNum } = await runBatchLoop(
+    options, remaining, touchedFiles, allItems, allKeptBranches,
+    concurrency, 0, false,
+  );
+
+  // Phase 2: serial fixes + new parallel opportunities
+  if (afterParallel.length > 0) {
+    log("info", "Parallel phase complete, starting serial phase", {
+      parallelBatches: batchNum,
+      remaining: afterParallel.length,
+      touchedFiles: touchedFiles.size,
+    });
+
+    ({ remaining: afterParallel, batchNum } = await runBatchLoop(
+      options, afterParallel, touchedFiles, allItems, allKeptBranches,
+      concurrency, batchNum, true,
+    ));
   }
 
   return {
