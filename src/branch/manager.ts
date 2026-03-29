@@ -144,15 +144,23 @@ export async function keepFixBranch(
 /**
  * Squash-merge a branch into the current branch.
  * Produces a single flat commit instead of a merge commit, keeping history linear.
+ * Preserves the original commit message(s) from the merged branch.
  */
 export async function mergeBranch(
   repoPath: string,
   branch: string,
 ): Promise<void> {
+  // Collect commit messages from the branch (oldest first)
+  const { stdout: branchLog } = await execa(
+    "git", ["log", "--reverse", "--format=%B", `HEAD..${branch}`],
+    { cwd: repoPath },
+  );
+  const message = branchLog.trim() || `squash: ${branch}`;
+
   await execa("git", ["merge", "--squash", branch], {
     cwd: repoPath,
   });
-  await execa("git", ["commit", "--no-edit", "-m", `squash: ${branch}`], {
+  await execa("git", ["commit", "--no-edit", "-m", message], {
     cwd: repoPath,
   });
   log("info", "Squash-merged branch", { branch });
