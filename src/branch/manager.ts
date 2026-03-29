@@ -163,6 +163,10 @@ export async function mergeBranch(
   await execa("git", ["commit", "--no-edit", "-m", message], {
     cwd: repoPath,
   });
+  await execa("git", ["branch", "-D", branch], {
+    cwd: repoPath,
+    reject: false,
+  });
   log("info", "Squash-merged branch", { branch });
 }
 
