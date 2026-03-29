@@ -24,7 +24,8 @@ deduplicated report so I can find issues faster and with higher confidence.
 - Automatically fingerprints the target repo (language, framework, test runner,
   linters, entry points, package manager, monorepo signals, architecture docs)
   and injects best-effort project context into every agent prompt
-- Repo fingerprinting is root-only (v1) and degrades gracefully on failure
+- In monorepos, resolves workspace packages and fingerprints each one (up to 20)
+- Repo fingerprinting degrades gracefully on failure
 
 ## Edge cases
 
