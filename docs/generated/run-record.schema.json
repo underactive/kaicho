@@ -16,7 +16,7 @@
     },
     "task": {
       "type": "string",
-      "description": "Task type that was run (security, qa, docs)"
+      "description": "Task type that was run (security, qa, docs, contracts, state, resources, testing, dx, performance, resilience, logging)"
     },
     "repoPath": {
       "type": "string",

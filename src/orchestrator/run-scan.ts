@@ -3,7 +3,7 @@ import * as path from "node:path";
 import type { RunResult } from "../types/index.js";
 import { resolveModel, getBase } from "../config/index.js";
 import { JsonStore } from "../suggestion-store/index.js";
-import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt, buildTestingScanPrompt, buildDxScanPrompt } from "../prompts/index.js";
+import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt, buildTestingScanPrompt, buildDxScanPrompt, buildPerformanceScanPrompt, buildResilienceScanPrompt, buildLoggingScanPrompt, SCAN_TASKS } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
 import { fingerprint, formatRepoContext } from "../repo-context/index.js";
@@ -49,6 +49,9 @@ const TASK_PROMPTS: Record<string, (fileManifest?: string, repoContext?: string)
   resources: buildResourcesScanPrompt,
   testing: buildTestingScanPrompt,
   dx: buildDxScanPrompt,
+  performance: buildPerformanceScanPrompt,
+  resilience: buildResilienceScanPrompt,
+  logging: buildLoggingScanPrompt,
 };
 
 /**

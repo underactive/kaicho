@@ -56,7 +56,7 @@ kaicho fix --batch --validate --repo=~/my-project
 
 Run agents against a repository. All installed agents run in parallel.
 
-Available tasks: `security`, `qa`, `docs`, `contracts`, `state`, `resources`, `testing`, `dx`
+Available tasks: `security`, `qa`, `docs`, `contracts`, `state`, `resources`, `testing`, `dx`, `performance`, `resilience`, `logging`
 
 ```
 Options:

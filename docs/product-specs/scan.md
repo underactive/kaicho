@@ -8,7 +8,7 @@ deduplicated report so I can find issues faster and with higher confidence.
 
 - Invokes all installed agents in parallel when `--agent` is omitted
 - Invokes a single agent when `--agent=<name>` is specified
-- Supports task types via `--task`: `security`, `qa`, `docs`, `contracts`, `state`, `resources`, `testing`, `dx`
+- Supports task types via `--task`: `security`, `qa`, `docs`, `contracts`, `state`, `resources`, `testing`, `dx`, `performance`, `resilience`, `logging`
 - Defaults to `security` task when `--task` is omitted
 - Scopes agent focus to specific directories via `--scope=<dirs>`
 - Scopes agent focus to file patterns via `--files=<patterns>`

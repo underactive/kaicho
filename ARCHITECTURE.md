@@ -90,7 +90,7 @@ single **Providers** interface. Domains never import cross-cutting code directly
 | `branch`          | Git branch + worktree lifecycle for fixes          | Implemented |
 | `fix-log`         | Track applied + discarded fixes, self-pruning      | Implemented |
 | `summarizer`      | Ollama integration for LLM summaries              | Implemented |
-| `prompts`         | 8 scan tasks + fix/retry/validate prompts          | Implemented |
+| `prompts`         | 11 scan tasks + fix/retry/validate prompts         | Implemented |
 | `logger`          | Structured JSON logging to stderr                 | Implemented |
 | `cli`             | 6 commands, 2 formatters, progress callbacks      | Implemented |
 | `repo-context`    | Project metadata fingerprinting for prompt enrichment | Implemented |

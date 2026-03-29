@@ -97,7 +97,8 @@ describe("runScan", () => {
     expect(agents).not.toContain("claude");
   });
 
-  it("returns error for unknown task", async () => {
+  it("returns error for unknown task listing all available", async () => {
+    const { SCAN_TASKS } = await import("../prompts/index.js");
     const result = await runScan({
       task: "nonexistent",
       repoPath: "/test/repo",
@@ -105,6 +106,9 @@ describe("runScan", () => {
 
     expect(result.results[0]?.status).toBe("agent-error");
     expect(result.results[0]?.error).toContain("Unknown task");
+    for (const task of SCAN_TASKS) {
+      expect(result.results[0]?.error).toContain(task);
+    }
   });
 
   it("clusters suggestions from multiple agents", async () => {

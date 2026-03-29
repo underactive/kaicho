@@ -19,7 +19,7 @@ code is structured.
 
 | Spec | Status | Description |
 |------|--------|-------------|
-| [scan](scan.md) | Implemented | Multi-agent parallel scanning, 8 task types, dedup and scoping |
+| [scan](scan.md) | Implemented | Multi-agent parallel scanning, 11 task types, dedup and scoping |
 | [report](report.md) | Implemented | View and filter past scan results |
 | [list](list.md) | Implemented | Show installed agents and versions |
 | [config](config.md) | Implemented | Per-repo config file + kaicho init |

@@ -1,4 +1,5 @@
 export { SUGGESTIONS_JSON_SCHEMA } from "./shared.js";
+export { SCAN_TASKS, type ScanTask } from "./scan-tasks.js";
 export { buildSecurityScanPrompt } from "./security-scan.js";
 export { buildQaScanPrompt } from "./qa-scan.js";
 export { buildDocsScanPrompt } from "./docs-scan.js";
@@ -7,5 +8,8 @@ export { buildStateScanPrompt } from "./state-scan.js";
 export { buildResourcesScanPrompt } from "./resources-scan.js";
 export { buildTestingScanPrompt } from "./testing-scan.js";
 export { buildDxScanPrompt } from "./dx-scan.js";
+export { buildPerformanceScanPrompt } from "./performance-scan.js";
+export { buildResilienceScanPrompt } from "./resilience-scan.js";
+export { buildLoggingScanPrompt } from "./logging-scan.js";
 export { buildFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
 export { buildValidationPrompt, pickReviewer, type ValidationResult } from "./validate.js";

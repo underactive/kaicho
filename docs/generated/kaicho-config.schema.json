@@ -16,7 +16,7 @@
     },
     "task": {
       "type": "string",
-      "enum": ["security", "qa", "docs"],
+      "enum": ["security", "qa", "docs", "contracts", "state", "resources", "testing", "dx", "performance", "resilience", "logging"],
       "description": "Default task type (default: security)"
     },
     "timeout": {
