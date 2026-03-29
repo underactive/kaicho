@@ -140,3 +140,28 @@ export async function keepFixBranch(
 ): Promise<void> {
   await execa("git", ["checkout", previousBranch], { cwd: repoPath });
 }
+
+/**
+ * Merge a branch into the current branch.
+ * Used by sweep to incorporate fix branches into the sweep branch.
+ */
+export async function mergeBranch(
+  repoPath: string,
+  branch: string,
+): Promise<void> {
+  await execa("git", ["merge", branch, "--no-edit"], {
+    cwd: repoPath,
+  });
+  log("info", "Merged branch", { branch });
+}
+
+/**
+ * Revert the most recent merge commit.
+ * Used by sweep to undo a layer's fixes when regressions are detected.
+ */
+export async function revertMergeCommit(repoPath: string): Promise<void> {
+  await execa("git", ["revert", "-m", "1", "HEAD", "--no-edit"], {
+    cwd: repoPath,
+  });
+  log("info", "Reverted merge commit", { repoPath });
+}

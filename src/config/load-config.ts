@@ -20,6 +20,7 @@ export interface KaichoConfig {
   reviewer?: string;
   retention?: number;
   summarizerModel?: string;
+  maxSweepRounds?: number;
 }
 
 /**
@@ -69,6 +70,7 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
       reviewer: str(raw["reviewer"]),
       retention: num(raw["retention"]),
       summarizerModel: str(raw["summarizerModel"]),
+      maxSweepRounds: num(raw["maxSweepRounds"]),
     };
   } catch {
     log("warn", "Invalid config file, ignoring", { path: configPath });

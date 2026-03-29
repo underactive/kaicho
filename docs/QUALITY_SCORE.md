@@ -23,8 +23,8 @@ cleanup and investment.
 | `suggestion-store`| A     | Symlink/traversal protection, 6 tests           | 2026-03-26    |
 | `dedup`           | A     | Proximity clustering, severity filter, 12 tests | 2026-03-26    |
 | `scope`           | A     | git ls-files + fallback, glob matching, 9 tests | 2026-03-26    |
-| `orchestrator`    | A     | Scan + fix + parallel-fix + retry + validation, shared resolveAdapter, 34 tests | 2026-03-27 |
-| `cli`             | A-    | 6 commands, 2 formatters, 12 formatter tests      | 2026-03-27    |
+| `orchestrator`    | A     | Scan + fix + parallel-fix + retry + validation + sweep, shared resolveAdapter | 2026-03-29 |
+| `cli`             | A-    | 7 commands, 2 formatters, 12 formatter tests      | 2026-03-29    |
 | `config`          | B+    | Config load + merge works, no tests (simple)     | 2026-03-26    |
 | `prompts`         | A     | 11 scan tasks + fix + retry + validate (category-scoped), table-driven tests | 2026-03-29 |
 | `logger`          | B+    | Minimal structured logger, no tests (trivial)    | 2026-03-26    |
@@ -40,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | A     | 275 tests across 21 files, all critical domains covered | 2026-03-29 |
+| Test coverage     | A     | 289 tests across 22 files, all critical domains covered | 2026-03-29 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process

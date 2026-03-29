@@ -24,6 +24,7 @@ code is structured.
 | [list](list.md) | Implemented | Show installed agents and versions |
 | [config](config.md) | Implemented | Per-repo config file + kaicho init |
 | [fix](fix.md) | Implemented (Phase A-D) | Single + parallel worktree batch fix, validation, retry, discarded fix log |
+| [sweep](sweep.md) | Implemented | Multi-round layered scan-fix-verify loop, regression detection |
 | enrich | Implemented | Ollama LLM summaries for findings (auto or manual) |
 
 ## Writing specs

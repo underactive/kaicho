@@ -93,6 +93,26 @@ Options:
   --verbose               Show agent stderr output in real-time
 ```
 
+### `kaicho sweep`
+
+Run a layered, multi-round scan-fix-verify loop across all task types. Scans in priority order (security → qa → contracts/state → resources/resilience → performance → logging → testing/docs/dx), fixes findings at each layer, and checks for regressions before advancing.
+
+```
+Options:
+  --repo <path>           Path to target repository (default: .)
+  --auto                  Fix without confirmations
+  --max-rounds <n>        Maximum sweep rounds (default: 3)
+  --agents <agents>       Agents to use (comma-separated)
+  --exclude <agents>      Exclude agents
+  --timeout <ms>          Agent timeout (default: 1800000)
+  --validate              Cross-agent validation on fixes
+  --reviewer <agent>      Reviewer agent for validation
+  --concurrency <n>       Parallel fix concurrency (default: 3)
+  --verbose               Show detailed output
+```
+
+Exits when zero critical/high findings remain in security + qa, or after max rounds. Writes `.kaicho/sweep-report.json` and `.kaicho/sweep-regressions.json`.
+
 ### `kaicho report`
 
 Re-display past scan results without re-running agents.
@@ -156,7 +176,8 @@ Create per-repo config with `kaicho init`, or create the global config manually:
   },
   "reviewer": "claude",
   "retention": 3,
-  "summarizerModel": "gemma3:1b"
+  "summarizerModel": "gemma3:1b",
+  "maxSweepRounds": 3
 }
 ```
 

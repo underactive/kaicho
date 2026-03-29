@@ -7,6 +7,8 @@ export {
   resetLastCommit,
   discardFixBranch,
   keepFixBranch,
+  mergeBranch,
+  revertMergeCommit,
   type BranchResult,
 } from "./manager.js";
 

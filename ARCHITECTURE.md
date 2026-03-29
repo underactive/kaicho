@@ -18,6 +18,7 @@ deduplicates across agents, and can dispatch agents to apply fixes.
 │  run-scan: parallel agents + scope + auto-enrich        │
 │  run-fix: single fix on isolated branch                 │
 │  run-parallel-fix: worktree per fix, up to 3 concurrent │
+│  run-sweep: layered multi-round scan-fix-verify loop    │
 └──────────┬──────────────────────────────────┬───────────┘
            │                                  │
            ▼                                  ▼
@@ -86,13 +87,13 @@ single **Providers** interface. Domains never import cross-cutting code directly
 | `suggestion-store`| Persist RunRecords to .kaicho/runs/               | Implemented |
 | `dedup`           | Cluster, merge, filter suggestions across agents  | Implemented |
 | `scope`           | File list resolution via git ls-files + globs     | Implemented |
-| `orchestrator`    | Scan, fix, parallel-fix, validation, retry        | Implemented |
+| `orchestrator`    | Scan, fix, parallel-fix, validation, retry, sweep | Implemented |
 | `branch`          | Git branch + worktree lifecycle for fixes          | Implemented |
 | `fix-log`         | Track applied + discarded fixes, self-pruning      | Implemented |
 | `summarizer`      | Ollama integration for LLM summaries              | Implemented |
 | `prompts`         | 11 scan tasks + fix/retry/validate prompts         | Implemented |
 | `logger`          | Structured JSON logging to stderr                 | Implemented |
-| `cli`             | 6 commands, 2 formatters, progress callbacks      | Implemented |
+| `cli`             | 7 commands, 2 formatters, progress callbacks      | Implemented |
 | `repo-context`    | Project metadata fingerprinting for prompt enrichment | Implemented |
 
 ## Key design decisions

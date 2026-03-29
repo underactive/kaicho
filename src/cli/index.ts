@@ -7,6 +7,7 @@ import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
 import { reportCommand } from "./commands/report.js";
 import { scanCommand } from "./commands/scan.js";
+import { sweepCommand } from "./commands/sweep.js";
 
 const program = new Command();
 
@@ -21,5 +22,6 @@ program.addCommand(initCommand);
 program.addCommand(listCommand);
 program.addCommand(reportCommand);
 program.addCommand(scanCommand);
+program.addCommand(sweepCommand);
 
 program.parse();

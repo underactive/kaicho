@@ -59,6 +59,11 @@
     "summarizerModel": {
       "type": "string",
       "description": "Ollama model for LLM summaries (default: gemma3:1b)"
+    },
+    "maxSweepRounds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of sweep rounds before stopping (default: 3)"
     }
   },
   "additionalProperties": false
