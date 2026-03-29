@@ -47,6 +47,7 @@ export function buildValidationPrompt(
   cluster: SuggestionCluster,
   diff: string,
   fixerContext?: string | null,
+  repoContext?: string,
 ): string {
   const location = cluster.line
     ? `${cluster.file}:${cluster.line}`
@@ -58,8 +59,10 @@ export function buildValidationPrompt(
 
   const catScope = CATEGORY_SCOPE[cluster.category] ?? DEFAULT_SCOPE;
 
-  return `You are a code reviewer validating a fix applied by another AI agent.
+  const contextBlock = repoContext ? `\n${repoContext}\n` : "";
 
+  return `You are a code reviewer validating a fix applied by another AI agent.
+${contextBlock}
 ORIGINAL FINDING:
 Location: ${location}
 Severity: ${cluster.severity}

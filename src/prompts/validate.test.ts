@@ -44,6 +44,19 @@ describe("buildValidationPrompt", () => {
     expect(prompt).toContain('"approve"');
     expect(prompt).toContain('"concern"');
   });
+
+  it("includes repo context when provided", () => {
+    const ctx = "PROJECT CONTEXT (best-effort repo-level hints — may be incomplete or outdated):\n- Languages: Rust\n- Linters: clippy";
+    const prompt = buildValidationPrompt(makeCluster(), "diff", null, ctx);
+    expect(prompt).toContain("PROJECT CONTEXT");
+    expect(prompt).toContain("Rust");
+    expect(prompt).toContain("clippy");
+  });
+
+  it("omits repo context when not provided", () => {
+    const prompt = buildValidationPrompt(makeCluster(), "diff");
+    expect(prompt).not.toContain("PROJECT CONTEXT");
+  });
 });
 
 describe("pickReviewer", () => {

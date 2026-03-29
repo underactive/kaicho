@@ -18,6 +18,7 @@ export interface ParallelRetryContext {
   originalAgent: string;
   originalDiff: string;
   fixStartMs: number;
+  repoContext?: string;
 }
 
 export interface ParallelRetryOutcome {
@@ -32,7 +33,7 @@ export interface ParallelRetryOutcome {
 export async function executeParallelRetry(ctx: ParallelRetryContext): Promise<ParallelRetryOutcome> {
   await resetLastCommit(ctx.worktreePath);
 
-  const retryPrompt = buildRetryFixPrompt(ctx.cluster, ctx.originalDiff, ctx.concern);
+  const retryPrompt = buildRetryFixPrompt(ctx.cluster, ctx.originalDiff, ctx.concern, ctx.repoContext);
   log("info", "Parallel retry fix", { reviewer: ctx.reviewer, cluster: ctx.cluster.id });
 
   const result = await ctx.adapter.run(ctx.worktreePath, retryPrompt, "fix");

@@ -13,6 +13,7 @@ import {
   keepFixBranch,
 } from "../branch/index.js";
 import { recordFix } from "../fix-log/index.js";
+import { fingerprint, formatRepoContext } from "../repo-context/index.js";
 import { log } from "../logger/index.js";
 
 export interface FixProgress {
@@ -105,7 +106,16 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
       };
     }
 
-    const prompt = buildFixPrompt(cluster);
+    // Fingerprint repo for context (graceful degradation)
+    let repoContextString: string | undefined;
+    try {
+      const ctx = await fingerprint(absRepoPath);
+      repoContextString = formatRepoContext(ctx) || undefined;
+    } catch {
+      // Continue without context
+    }
+
+    const prompt = buildFixPrompt(cluster, repoContextString);
     log("info", "Running fix", { agent: agentName, branch, cluster: `${cluster.file}:${cluster.line}` });
     notify({ step: "running-agent", agent: agentName, branch, detail: `${cluster.file}:${cluster.line}` });
 

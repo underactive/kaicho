@@ -56,6 +56,19 @@ describe("buildFixPrompt", () => {
     expect(prompt).toContain("minimal, targeted fix");
     expect(prompt).toContain("Do NOT refactor");
   });
+
+  it("includes repo context when provided", () => {
+    const ctx = "PROJECT CONTEXT (best-effort repo-level hints — may be incomplete or outdated):\n- Languages: TypeScript\n- Test runner: vitest";
+    const prompt = buildFixPrompt(makeCluster(), ctx);
+    expect(prompt).toContain("PROJECT CONTEXT");
+    expect(prompt).toContain("TypeScript");
+    expect(prompt).toContain("vitest");
+  });
+
+  it("omits repo context when not provided", () => {
+    const prompt = buildFixPrompt(makeCluster());
+    expect(prompt).not.toContain("PROJECT CONTEXT");
+  });
 });
 
 describe("buildRetryFixPrompt", () => {
@@ -85,6 +98,18 @@ describe("buildRetryFixPrompt", () => {
     expect(prompt).toContain("src/api.ts:42");
     expect(prompt).toContain("SEVERITY: high");
     expect(prompt).toContain("claude: SQL injection");
+  });
+
+  it("includes repo context when provided", () => {
+    const ctx = "PROJECT CONTEXT (best-effort repo-level hints — may be incomplete or outdated):\n- Languages: Go";
+    const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern, ctx);
+    expect(prompt).toContain("PROJECT CONTEXT");
+    expect(prompt).toContain("Go");
+  });
+
+  it("omits repo context when not provided", () => {
+    const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern);
+    expect(prompt).not.toContain("PROJECT CONTEXT");
   });
 });
 

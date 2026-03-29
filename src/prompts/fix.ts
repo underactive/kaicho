@@ -29,7 +29,7 @@ export function extractFixerContext(rawOutput: string): string | null {
  * Build a prompt that instructs an agent to apply a fix for a specific
  * suggestion cluster. The agent will have write access to the repo.
  */
-export function buildFixPrompt(cluster: SuggestionCluster): string {
+export function buildFixPrompt(cluster: SuggestionCluster, repoContext?: string): string {
   const location = cluster.line
     ? `${cluster.file}:${cluster.line}`
     : cluster.file;
@@ -42,8 +42,10 @@ export function buildFixPrompt(cluster: SuggestionCluster): string {
     ? `\nSuggested fix:\n${cluster.suggestedChange}`
     : "";
 
-  return `You are a senior developer fixing a ${cluster.category} issue found during a code review.
+  const contextBlock = repoContext ? `\n${repoContext}\n` : "";
 
+  return `You are a senior developer fixing a ${cluster.category} issue found during a code review.
+${contextBlock}
 ISSUE LOCATION: ${location}
 SEVERITY: ${cluster.severity}
 CATEGORY: ${cluster.category}
@@ -79,6 +81,7 @@ export function buildRetryFixPrompt(
   cluster: SuggestionCluster,
   failedDiff: string,
   concern: string,
+  repoContext?: string,
 ): string {
   const location = cluster.line
     ? `${cluster.file}:${cluster.line}`
@@ -92,8 +95,10 @@ export function buildRetryFixPrompt(
     ? `\nSuggested fix:\n${cluster.suggestedChange}`
     : "";
 
-  return `You are a senior developer fixing a ${cluster.category} issue found during a code review.
+  const contextBlock = repoContext ? `\n${repoContext}\n` : "";
 
+  return `You are a senior developer fixing a ${cluster.category} issue found during a code review.
+${contextBlock}
 A previous fix attempt was REJECTED by a reviewer. You must apply a DIFFERENT, better fix.
 
 ISSUE LOCATION: ${location}

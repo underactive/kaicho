@@ -17,6 +17,7 @@ export interface ValidateOptions {
   reviewer?: string;
   verbose?: boolean;
   fixerContext?: string;
+  repoContext?: string;
 }
 
 export interface ValidateResult {
@@ -77,10 +78,10 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
       };
     }
 
-    return executeValidation(fallback, fallbackAdapter, absRepoPath, cluster, diff, startMs, options.fixerContext);
+    return executeValidation(fallback, fallbackAdapter, absRepoPath, cluster, diff, startMs, options.fixerContext, options.repoContext);
   }
 
-  return executeValidation(reviewerName, adapter, absRepoPath, cluster, diff, startMs, options.fixerContext);
+  return executeValidation(reviewerName, adapter, absRepoPath, cluster, diff, startMs, options.fixerContext, options.repoContext);
 }
 
 async function executeValidation(
@@ -91,8 +92,9 @@ async function executeValidation(
   diff: string,
   startMs: number,
   fixerContext?: string,
+  repoContext?: string,
 ): Promise<ValidateResult> {
-  const prompt = buildValidationPrompt(cluster, diff, fixerContext);
+  const prompt = buildValidationPrompt(cluster, diff, fixerContext, repoContext);
   log("info", "Running validation", { reviewer: reviewerName, cluster: cluster.id });
 
   // Use "review" mode: read-only permissions, no schema enforcement.

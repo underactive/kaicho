@@ -48,6 +48,14 @@ vi.mock("../fix-log/index.js", () => ({
   recordFix: mockRecordFix,
 }));
 
+vi.mock("../repo-context/index.js", () => ({
+  fingerprint: vi.fn().mockResolvedValue({
+    languages: [], frameworks: [], testRunners: [], linters: [],
+    entryPoints: [], packageManager: null, monorepoTool: null, architectureDocs: [],
+  }),
+  formatRepoContext: vi.fn().mockReturnValue(""),
+}));
+
 // Import after mocks are set up
 const { runFix } = await import("./run-fix.js");
 

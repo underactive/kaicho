@@ -40,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | A-    | 192 tests across 20 files, all critical domains covered | 2026-03-29 |
+| Test coverage     | A-    | 198 tests across 20 files, all critical domains covered | 2026-03-29 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process

@@ -57,6 +57,14 @@ vi.mock("../fix-log/index.js", () => ({
   recordDiscardedFix: mockRecordDiscardedFix,
 }));
 
+vi.mock("../repo-context/index.js", () => ({
+  fingerprint: vi.fn().mockResolvedValue({
+    languages: [], frameworks: [], testRunners: [], linters: [],
+    entryPoints: [], packageManager: null, monorepoTool: null, architectureDocs: [],
+  }),
+  formatRepoContext: vi.fn().mockReturnValue(""),
+}));
+
 vi.mock("../config/index.js", async () => {
   const real = await vi.importActual<typeof import("../config/index.js")>("../config/index.js");
   return {
