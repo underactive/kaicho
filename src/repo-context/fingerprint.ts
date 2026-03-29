@@ -1,9 +1,45 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
+import {
+  detectFromPackageJson,
+  detectFromGoMod,
+  detectFromCargoToml,
+  detectFromPlatformioIni,
+  detectFromSwiftProject,
+  detectFromGradle,
+  detectFromPomXml,
+  detectFromPyprojectToml,
+  CONFIG_CHECKS,
+  LOCKFILE_TO_PM,
+  ARCH_DOCS,
+  MONOREPO_FILES,
+} from "./detectors.js";
+import { countFilesByLanguage } from "./file-distribution.js";
+import { scanSubdirectories } from "./subdirectory-scan.js";
+import { extractWorkspacePatterns, resolveWorkspacePaths, fingerprintPackage } from "./workspace.js";
+
 export interface DetectedSignal {
   name: string;
   source: string;
+}
+
+export interface LanguageShare {
+  language: string;
+  files: number;
+  percentage: number;
+}
+
+export interface ComponentContext {
+  /** Relative path prefix, e.g. "frontend", "src", or "" for root */
+  path: string;
+  languages: DetectedSignal[];
+  frameworks: DetectedSignal[];
+  testRunners: DetectedSignal[];
+  linters: DetectedSignal[];
+  entryPoints: string[];
+  packageManager: string | null;
+  languageDistribution: LanguageShare[];
 }
 
 export interface RepoContext {
@@ -16,6 +52,8 @@ export interface RepoContext {
   monorepoTool: string | null;
   architectureDocs: string[];
   workspacePackages: string[];
+  languageDistribution: LanguageShare[];
+  components: ComponentContext[];
 }
 
 function emptyContext(): RepoContext {
@@ -29,10 +67,12 @@ function emptyContext(): RepoContext {
     monorepoTool: null,
     architectureDocs: [],
     workspacePackages: [],
+    languageDistribution: [],
+    components: [],
   };
 }
 
-async function readSafe(filePath: string): Promise<string | null> {
+export async function readSafe(filePath: string): Promise<string | null> {
   try {
     return await fs.readFile(filePath, "utf-8");
   } catch {
@@ -40,7 +80,7 @@ async function readSafe(filePath: string): Promise<string | null> {
   }
 }
 
-async function exists(filePath: string): Promise<boolean> {
+export async function exists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
     return true;
@@ -49,330 +89,181 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-// --- Ecosystem detectors ---
-
-interface PackageJson {
-  main?: string;
-  module?: string;
-  bin?: string | Record<string, string>;
-  workspaces?: string[] | { packages: string[] };
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-}
-
-function detectFromPackageJson(raw: string, ctx: RepoContext, source = "package.json"): void {
-  let pkg: PackageJson;
+async function findDotNetProject(dir: string): Promise<string | null> {
   try {
-    pkg = JSON.parse(raw) as PackageJson;
+    const entries = await fs.readdir(dir);
+    return entries.find((e) =>
+      e.endsWith(".sln") || e.endsWith(".slnx") || e.endsWith(".csproj") || e.endsWith(".fsproj"),
+    ) ?? null;
   } catch {
-    return;
+    return null;
   }
+}
 
-  const src = source;
-  const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+export async function findXcodeproj(dir: string): Promise<string | null> {
+  try {
+    const entries = await fs.readdir(dir);
+    const proj = entries.find((e) => e.endsWith(".xcodeproj") || e.endsWith(".xcworkspace"));
+    return proj ?? null;
+  } catch {
+    return null;
+  }
+}
 
-  ctx.languages.push({ name: "JavaScript", source: src });
-
-  // Frameworks
-  const frameworkMap: Record<string, string> = {
-    next: "Next.js",
-    react: "React",
-    vue: "Vue",
-    nuxt: "Nuxt",
-    svelte: "Svelte",
-    "@sveltejs/kit": "SvelteKit",
-    express: "Express",
-    fastify: "Fastify",
-    hono: "Hono",
-    koa: "Koa",
-    "@nestjs/core": "NestJS",
-    "@angular/core": "Angular",
-    gatsby: "Gatsby",
-    remix: "Remix",
-    "@remix-run/node": "Remix",
+export function emptyComponent(componentPath: string): ComponentContext {
+  return {
+    path: componentPath,
+    languages: [],
+    frameworks: [],
+    testRunners: [],
+    linters: [],
+    entryPoints: [],
+    packageManager: null,
+    languageDistribution: [],
   };
-
-  const seenFrameworks = new Set<string>();
-  for (const [dep, name] of Object.entries(frameworkMap)) {
-    if (dep in allDeps && !seenFrameworks.has(name)) {
-      seenFrameworks.add(name);
-      ctx.frameworks.push({ name, source: src });
-    }
-  }
-
-  // Test runners
-  const testRunnerMap: Record<string, string> = {
-    vitest: "vitest",
-    jest: "jest",
-    mocha: "mocha",
-    ava: "ava",
-    "@playwright/test": "playwright",
-    cypress: "cypress",
-  };
-  for (const [dep, name] of Object.entries(testRunnerMap)) {
-    if (dep in allDeps) {
-      ctx.testRunners.push({ name, source: src });
-    }
-  }
-
-  // Linters / formatters
-  const linterMap: Record<string, string> = {
-    eslint: "eslint",
-    "@biomejs/biome": "biome",
-    prettier: "prettier",
-    oxlint: "oxlint",
-  };
-  for (const [dep, name] of Object.entries(linterMap)) {
-    if (dep in allDeps) {
-      ctx.linters.push({ name, source: src });
-    }
-  }
-
-  // Entry points
-  if (typeof pkg.main === "string") {
-    ctx.entryPoints.push(pkg.main);
-  } else if (typeof pkg.module === "string") {
-    ctx.entryPoints.push(pkg.module);
-  }
-  if (pkg.bin) {
-    if (typeof pkg.bin === "string") {
-      ctx.entryPoints.push(pkg.bin);
-    } else {
-      ctx.entryPoints.push(...Object.values(pkg.bin));
-    }
-  }
-
-  // Monorepo
-  if (pkg.workspaces) {
-    ctx.monorepoTool = "npm workspaces";
-  }
-}
-
-function detectFromGoMod(raw: string, ctx: RepoContext): void {
-  ctx.languages.push({ name: "Go", source: "go.mod" });
-
-  // Extract module path for entry point hint
-  const modMatch = raw.match(/^module\s+(\S+)/m);
-  if (modMatch?.[1]) {
-    ctx.entryPoints.push(modMatch[1]);
-  }
-}
-
-function detectFromCargoToml(raw: string, ctx: RepoContext, source = "Cargo.toml"): void {
-  const src = source;
-  ctx.languages.push({ name: "Rust", source: src });
-
-  // Detect [[bin]] entry points
-  const binMatches = raw.matchAll(/\[\[bin]]\s*\n(?:.*\n)*?name\s*=\s*"([^"]+)"/gm);
-  for (const m of binMatches) {
-    if (m[1]) ctx.entryPoints.push(m[1]);
-  }
-
-  // Detect workspace
-  if (/^\[workspace]/m.test(raw)) {
-    ctx.monorepoTool = "cargo workspaces";
-  }
-}
-
-function detectFromPyprojectToml(raw: string, ctx: RepoContext, source = "pyproject.toml"): void {
-  const src = source;
-  ctx.languages.push({ name: "Python", source: src });
-
-  // Test runners — match section headers with optional whitespace
-  if (/^\s*\[\s*tool\s*\.\s*pytest/m.test(raw)) {
-    ctx.testRunners.push({ name: "pytest", source: src });
-  }
-
-  // Linters / formatters
-  if (/^\s*\[\s*tool\s*\.\s*ruff/m.test(raw)) {
-    ctx.linters.push({ name: "ruff", source: src });
-  }
-  if (/^\s*\[\s*tool\s*\.\s*black/m.test(raw)) {
-    ctx.linters.push({ name: "black", source: src });
-  }
-  if (/^\s*\[\s*tool\s*\.\s*mypy/m.test(raw)) {
-    ctx.linters.push({ name: "mypy", source: src });
-  }
-
-  // Frameworks from dependencies (basic heuristic)
-  if (/django/i.test(raw)) {
-    ctx.frameworks.push({ name: "Django", source: src });
-  }
-  if (/fastapi/i.test(raw)) {
-    ctx.frameworks.push({ name: "FastAPI", source: src });
-  }
-  if (/flask/i.test(raw)) {
-    ctx.frameworks.push({ name: "Flask", source: src });
-  }
-}
-
-// --- Config file presence detection ---
-
-interface ConfigCheck {
-  patterns: string[];
-  signal: (ctx: RepoContext, matched: string) => void;
-}
-
-const CONFIG_CHECKS: ConfigCheck[] = [
-  {
-    patterns: ["tsconfig.json"],
-    signal: (ctx) => ctx.languages.push({ name: "TypeScript", source: "tsconfig.json" }),
-  },
-  {
-    patterns: [".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.yml", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", "eslint.config.ts"],
-    signal: (ctx, f) => ctx.linters.push({ name: "eslint", source: f }),
-  },
-  {
-    patterns: ["biome.json", "biome.jsonc"],
-    signal: (ctx, f) => ctx.linters.push({ name: "biome", source: f }),
-  },
-  {
-    patterns: [".prettierrc", ".prettierrc.json", ".prettierrc.js", ".prettierrc.cjs", "prettier.config.js", "prettier.config.cjs"],
-    signal: (ctx, f) => ctx.linters.push({ name: "prettier", source: f }),
-  },
-  {
-    patterns: ["jest.config.js", "jest.config.ts", "jest.config.mjs", "jest.config.cjs"],
-    signal: (ctx, f) => ctx.testRunners.push({ name: "jest", source: f }),
-  },
-  {
-    patterns: ["vitest.config.ts", "vitest.config.js", "vitest.config.mts", "vitest.config.mjs"],
-    signal: (ctx, f) => ctx.testRunners.push({ name: "vitest", source: f }),
-  },
-];
-
-// --- Package manager detection ---
-
-const LOCKFILE_TO_PM: Record<string, string> = {
-  "pnpm-lock.yaml": "pnpm",
-  "yarn.lock": "yarn",
-  "package-lock.json": "npm",
-  "bun.lockb": "bun",
-  "bun.lock": "bun",
-};
-
-// --- Architecture docs ---
-
-const ARCH_DOCS = ["CLAUDE.md", "AGENTS.md", "ARCHITECTURE.md", "README.md"];
-
-// --- Monorepo tools ---
-
-const MONOREPO_FILES: Record<string, string> = {
-  "pnpm-workspace.yaml": "pnpm workspaces",
-  "lerna.json": "lerna",
-};
-
-// --- Workspace resolution ---
-
-const MAX_WORKSPACE_PACKAGES = 20;
-
-/**
- * Extract workspace glob patterns from the monorepo config.
- */
-function extractWorkspacePatterns(
-  monorepoTool: string,
-  packageJsonRaw: string | null,
-  cargoTomlRaw: string | null,
-  pnpmWorkspaceRaw: string | null,
-  lernaJsonRaw: string | null,
-): string[] {
-  if (monorepoTool === "npm workspaces" && packageJsonRaw) {
-    try {
-      const pkg = JSON.parse(packageJsonRaw) as PackageJson;
-      if (Array.isArray(pkg.workspaces)) return pkg.workspaces;
-      if (pkg.workspaces && Array.isArray((pkg.workspaces as { packages: string[] }).packages)) {
-        return (pkg.workspaces as { packages: string[] }).packages;
-      }
-    } catch { /* skip */ }
-  }
-
-  if (monorepoTool === "pnpm workspaces" && pnpmWorkspaceRaw) {
-    // Simple regex parse: lines after "packages:" starting with "- "
-    const lines = pnpmWorkspaceRaw.split("\n");
-    const patterns: string[] = [];
-    let inPackages = false;
-    for (const line of lines) {
-      if (/^packages\s*:/i.test(line)) { inPackages = true; continue; }
-      if (inPackages) {
-        const match = line.match(/^\s*-\s*['"]?([^'"#\s]+)['"]?\s*/);
-        if (match?.[1]) {
-          patterns.push(match[1]);
-        } else if (/^\S/.test(line)) {
-          break; // New top-level key
-        }
-      }
-    }
-    return patterns;
-  }
-
-  if (monorepoTool === "lerna" && lernaJsonRaw) {
-    try {
-      const lerna = JSON.parse(lernaJsonRaw) as { packages?: string[] };
-      if (Array.isArray(lerna.packages)) return lerna.packages;
-    } catch { /* skip */ }
-    return ["packages/*"]; // Lerna default
-  }
-
-  if (monorepoTool === "cargo workspaces" && cargoTomlRaw) {
-    const membersMatch = cargoTomlRaw.match(/\[workspace]\s*\n[\s\S]*?members\s*=\s*\[([^\]]*)\]/m);
-    if (membersMatch?.[1]) {
-      return membersMatch[1].match(/"([^"]+)"/g)?.map((s) => s.replace(/"/g, "")) ?? [];
-    }
-  }
-
-  return [];
 }
 
 /**
- * Resolve workspace glob patterns to actual directories.
- * Supports simple `dir/*` patterns via fs.readdir. Literal paths checked directly.
+ * Build per-component contexts by grouping signals by their source directory.
+ * A signal with source "frontend/package.json" belongs to component "frontend".
  */
-async function resolveWorkspacePaths(root: string, patterns: string[]): Promise<string[]> {
-  const results: string[] = [];
+function buildComponents(ctx: RepoContext): ComponentContext[] {
+  const componentMap = new Map<string, ComponentContext>();
 
-  for (const pattern of patterns) {
-    if (pattern.endsWith("/*")) {
-      // Glob: list parent directory, filter for dirs with a manifest
-      const parent = path.join(root, pattern.slice(0, -2));
-      try {
-        const entries = await fs.readdir(parent, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isDirectory()) continue;
-          if (entry.name.startsWith(".")) continue;
-          results.push(path.join(parent, entry.name));
-          if (results.length >= MAX_WORKSPACE_PACKAGES) return results;
-        }
-      } catch {
-        // Parent doesn't exist, skip
-      }
-    } else {
-      // Literal path
-      const dir = path.join(root, pattern);
-      if (await exists(dir)) {
-        results.push(dir);
-        if (results.length >= MAX_WORKSPACE_PACKAGES) return results;
-      }
+  function getOrCreate(componentPath: string): ComponentContext {
+    let comp = componentMap.get(componentPath);
+    if (!comp) {
+      comp = emptyComponent(componentPath);
+      componentMap.set(componentPath, comp);
     }
+    return comp;
   }
 
-  return results;
+  function componentPathFromSource(source: string): string | null {
+    // Sources like "frontend/package.json" → "frontend"
+    // Sources like "package.json" or "tsconfig.json" → "" (root)
+    // Sources like "file distribution (68.4%)" → skip
+    if (source.includes("(")) return null;
+    const idx = source.indexOf("/");
+    if (idx === -1) return "";
+    return source.slice(0, idx);
+  }
+
+  // Group language and framework signals by component
+  for (const sig of ctx.languages) {
+    const cp = componentPathFromSource(sig.source);
+    if (cp !== null) getOrCreate(cp).languages.push(sig);
+  }
+  for (const sig of ctx.frameworks) {
+    const cp = componentPathFromSource(sig.source);
+    if (cp !== null) getOrCreate(cp).frameworks.push(sig);
+  }
+  for (const sig of ctx.testRunners) {
+    const cp = componentPathFromSource(sig.source);
+    if (cp !== null) getOrCreate(cp).testRunners.push(sig);
+  }
+  for (const sig of ctx.linters) {
+    const cp = componentPathFromSource(sig.source);
+    if (cp !== null) getOrCreate(cp).linters.push(sig);
+  }
+
+  // Only return components if there are at least 2 distinct ones with language signals
+  const withLanguages = [...componentMap.values()].filter((c) => c.languages.length > 0);
+  if (withLanguages.length < 2) return [];
+
+  // Dedup within each component
+  for (const comp of withLanguages) {
+    comp.languages = dedup(comp.languages);
+    comp.frameworks = dedup(comp.frameworks);
+    comp.testRunners = dedup(comp.testRunners);
+    comp.linters = dedup(comp.linters);
+  }
+
+  return withLanguages;
 }
 
 /**
- * Fingerprint a single workspace package by reading its manifest.
+ * Build components by running per-directory file distribution.
+ * Used when manifest-based detection didn't find distinct components
+ * but the repo has multiple languages (e.g., Sonarr: root manifests for JS/TS,
+ * but src/ is mostly C# and frontend/ is mostly TypeScript).
  */
-async function fingerprintPackage(pkgPath: string, root: string, ctx: RepoContext): Promise<void> {
-  const rel = path.relative(root, pkgPath);
+async function buildComponentsFromDistribution(
+  root: string,
+  ctx: RepoContext,
+): Promise<ComponentContext[]> {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
 
-  // Try each manifest type concurrently
-  const [pkgJson, cargoToml, pyproject] = await Promise.all([
-    readSafe(path.join(pkgPath, "package.json")),
-    readSafe(path.join(pkgPath, "Cargo.toml")),
-    readSafe(path.join(pkgPath, "pyproject.toml")),
-  ]);
+  const dirs = entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !SKIP_DIRS_SET.has(e.name))
+    .slice(0, 10);
 
-  if (pkgJson) detectFromPackageJson(pkgJson, ctx, `${rel}/package.json`);
-  if (cargoToml) detectFromCargoToml(cargoToml, ctx, `${rel}/Cargo.toml`);
-  if (pyproject) detectFromPyprojectToml(pyproject, ctx, `${rel}/pyproject.toml`);
+  const components: ComponentContext[] = [];
+  const primaryLangs = new Set<string>();
+
+  for (const dir of dirs) {
+    const dist = await countFilesByLanguage(path.join(root, dir.name));
+    if (dist.length === 0 || dist[0]!.files < 5) continue;
+
+    const primary = dist[0]!.language;
+    primaryLangs.add(primary);
+
+    const comp = emptyComponent(dir.name);
+    comp.languageDistribution = dist;
+    comp.languages = [{ name: primary, source: `${dir.name}/ (${dist[0]!.percentage}% of files)` }];
+
+    // Copy manifest-detected frameworks that belong to this directory
+    for (const fw of ctx.frameworks) {
+      if (fw.source.startsWith(dir.name + "/")) {
+        comp.frameworks.push(fw);
+      }
+    }
+    for (const tr of ctx.testRunners) {
+      if (tr.source.startsWith(dir.name + "/")) {
+        comp.testRunners.push(tr);
+      }
+    }
+    for (const lt of ctx.linters) {
+      if (lt.source.startsWith(dir.name + "/")) {
+        comp.linters.push(lt);
+      }
+    }
+    // For distribution-based detection, only include frameworks from this directory.
+    // Root-level frameworks (e.g., React from root package.json) are ambiguous and excluded.
+
+    components.push(comp);
+  }
+
+  // Only return if different directories have different primary languages
+  if (primaryLangs.size < 2) return [];
+
+  // Dedup frameworks within each component
+  for (const comp of components) {
+    comp.frameworks = dedup(comp.frameworks);
+  }
+
+  return components;
+}
+
+const SKIP_DIRS_SET = new Set([
+  "node_modules", ".git", "vendor", "third_party", "thirdparty",
+  "dist", "build", "out", ".pio", "__pycache__", ".next",
+  "target", "Pods", ".gradle", "bin", "obj",
+  "doc", "docs", "assets", "scripts", "tools",
+]);
+
+function dedup(signals: DetectedSignal[]): DetectedSignal[] {
+  const seen = new Set<string>();
+  return signals.filter((s) => {
+    if (seen.has(s.name)) return false;
+    seen.add(s.name);
+    return true;
+  });
 }
 
 // --- Main fingerprint function ---
@@ -386,18 +277,26 @@ export async function fingerprint(repoPath: string): Promise<RepoContext> {
   const root = path.resolve(repoPath);
 
   // Phase 1: Read ecosystem manifest files concurrently
-  const [packageJsonRaw, goModRaw, cargoTomlRaw, pyprojectRaw] =
+  const [packageJsonRaw, goModRaw, cargoTomlRaw, pyprojectRaw, platformioIniRaw, gradleRaw, gradleKtsRaw, pomXmlRaw] =
     await Promise.all([
       readSafe(path.join(root, "package.json")),
       readSafe(path.join(root, "go.mod")),
       readSafe(path.join(root, "Cargo.toml")),
       readSafe(path.join(root, "pyproject.toml")),
+      readSafe(path.join(root, "platformio.ini")),
+      readSafe(path.join(root, "build.gradle")),
+      readSafe(path.join(root, "build.gradle.kts")),
+      readSafe(path.join(root, "pom.xml")),
     ]);
 
   if (packageJsonRaw) detectFromPackageJson(packageJsonRaw, ctx);
   if (goModRaw) detectFromGoMod(goModRaw, ctx);
   if (cargoTomlRaw) detectFromCargoToml(cargoTomlRaw, ctx);
   if (pyprojectRaw) detectFromPyprojectToml(pyprojectRaw, ctx);
+  if (platformioIniRaw) detectFromPlatformioIni(platformioIniRaw, ctx);
+  if (gradleRaw) detectFromGradle(gradleRaw, ctx);
+  else if (gradleKtsRaw) detectFromGradle(gradleKtsRaw, ctx, "build.gradle.kts");
+  if (pomXmlRaw) detectFromPomXml(pomXmlRaw, ctx);
 
   // Phase 2: Check config files, lockfiles, docs, monorepo signals concurrently
   const allChecks: Array<Promise<void>> = [];
@@ -440,6 +339,33 @@ export async function fingerprint(repoPath: string): Promise<RepoContext> {
     );
   }
 
+  // .NET solution files (.sln, .slnx, .csproj, .fsproj)
+  allChecks.push(
+    findDotNetProject(root).then((name) => {
+      if (name) {
+        ctx.languages.push({ name: name.endsWith(".fsproj") ? "F#" : "C#", source: name });
+        ctx.frameworks.push({ name: ".NET", source: name });
+      }
+    }),
+  );
+
+  // Swift / Xcode detection
+  allChecks.push(
+    exists(path.join(root, "Package.swift")).then((found) => {
+      if (found) detectFromSwiftProject(ctx, "Package.swift");
+    }),
+  );
+  allChecks.push(
+    exists(path.join(root, "project.yml")).then((found) => {
+      if (found) detectFromSwiftProject(ctx, "project.yml");
+    }),
+  );
+  allChecks.push(
+    findXcodeproj(root).then((name) => {
+      if (name) detectFromSwiftProject(ctx, name);
+    }),
+  );
+
   await Promise.all(allChecks);
 
   // Phase 3: Fingerprint workspace packages (if monorepo detected)
@@ -462,6 +388,21 @@ export async function fingerprint(repoPath: string): Promise<RepoContext> {
     }
   }
 
+  // Phase 4: Scan immediate subdirectories for manifest files
+  // Catches multi-project repos (e.g., firmware/ + macos/, backend/ + frontend/)
+  await scanSubdirectories(root, ctx);
+
+  // Phase 5: File extension language distribution (like GitHub Linguist)
+  ctx.languageDistribution = await countFilesByLanguage(root);
+
+  // Merge languages found by distribution but missed by manifest detection
+  const knownLangs = new Set(ctx.languages.map((s) => s.name));
+  for (const share of ctx.languageDistribution) {
+    if (share.percentage >= 5 && !knownLangs.has(share.language)) {
+      ctx.languages.push({ name: share.language, source: `file distribution (${share.percentage}%)` });
+    }
+  }
+
   // Deduplicate signals (config file + package.json may both detect eslint)
   ctx.languages = dedup(ctx.languages);
   ctx.frameworks = dedup(ctx.frameworks);
@@ -470,14 +411,25 @@ export async function fingerprint(repoPath: string): Promise<RepoContext> {
   ctx.entryPoints = [...new Set(ctx.entryPoints)];
   ctx.architectureDocs = [...new Set(ctx.architectureDocs)];
 
-  return ctx;
-}
+  // Phase 6: Build per-component contexts from signal sources
+  ctx.components = buildComponents(ctx);
 
-function dedup(signals: DetectedSignal[]): DetectedSignal[] {
-  const seen = new Set<string>();
-  return signals.filter((s) => {
-    if (seen.has(s.name)) return false;
-    seen.add(s.name);
-    return true;
-  });
+  // If manifest-based detection didn't find components, try distribution-based detection.
+  // Check if top-level directories have distinct primary languages.
+  if (ctx.components.length === 0 && ctx.languageDistribution.length > 1) {
+    ctx.components = await buildComponentsFromDistribution(root, ctx);
+  }
+
+  // Per-component language distribution (only when components detected)
+  if (ctx.components.length > 0) {
+    await Promise.all(
+      ctx.components.map(async (comp) => {
+        if (comp.path && comp.languageDistribution.length === 0) {
+          comp.languageDistribution = await countFilesByLanguage(path.join(root, comp.path));
+        }
+      }),
+    );
+  }
+
+  return ctx;
 }

@@ -60,9 +60,10 @@ vi.mock("../fix-log/index.js", () => ({
 vi.mock("../repo-context/index.js", () => ({
   fingerprint: vi.fn().mockResolvedValue({
     languages: [], frameworks: [], testRunners: [], linters: [],
-    entryPoints: [], packageManager: null, monorepoTool: null, architectureDocs: [], workspacePackages: [],
+    entryPoints: [], packageManager: null, monorepoTool: null, architectureDocs: [], workspacePackages: [], languageDistribution: [], components: [],
   }),
   formatRepoContext: vi.fn().mockReturnValue(""),
+  formatContextForFile: vi.fn().mockReturnValue(""),
 }));
 
 vi.mock("../config/index.js", async () => {

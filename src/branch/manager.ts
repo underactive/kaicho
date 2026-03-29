@@ -142,17 +142,20 @@ export async function keepFixBranch(
 }
 
 /**
- * Merge a branch into the current branch.
- * Used by sweep to incorporate fix branches into the sweep branch.
+ * Squash-merge a branch into the current branch.
+ * Produces a single flat commit instead of a merge commit, keeping history linear.
  */
 export async function mergeBranch(
   repoPath: string,
   branch: string,
 ): Promise<void> {
-  await execa("git", ["merge", branch, "--no-edit"], {
+  await execa("git", ["merge", "--squash", branch], {
     cwd: repoPath,
   });
-  log("info", "Merged branch", { branch });
+  await execa("git", ["commit", "--no-edit", "-m", `squash: ${branch}`], {
+    cwd: repoPath,
+  });
+  log("info", "Squash-merged branch", { branch });
 }
 
 /**
@@ -172,12 +175,12 @@ export async function getChangedFiles(
 }
 
 /**
- * Revert the most recent merge commit.
+ * Revert the most recent commit.
  * Used by sweep to undo a layer's fixes when regressions are detected.
  */
 export async function revertMergeCommit(repoPath: string): Promise<void> {
-  await execa("git", ["revert", "-m", "1", "HEAD", "--no-edit"], {
+  await execa("git", ["revert", "HEAD", "--no-edit"], {
     cwd: repoPath,
   });
-  log("info", "Reverted merge commit", { repoPath });
+  log("info", "Reverted commit", { repoPath });
 }

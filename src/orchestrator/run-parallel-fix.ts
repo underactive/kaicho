@@ -18,7 +18,7 @@ import {
 } from "../branch/index.js";
 import { runValidation, type ValidateResult } from "./run-validate.js";
 import { recordFix, recordDiscardedFix } from "../fix-log/index.js";
-import { fingerprint, formatRepoContext } from "../repo-context/index.js";
+import { fingerprint, formatContextForFile, type RepoContext } from "../repo-context/index.js";
 import { log } from "../logger/index.js";
 
 export interface ParallelFixItemResult {
@@ -138,7 +138,7 @@ async function executeFixInWorktree(
   cluster: SuggestionCluster, index: number, total: number,
   absRepoPath: string, baseBranch: string,
   options: ParallelFixOptions, notify: (p: ParallelFixProgress) => void,
-  repoContext?: string,
+  repoCtx?: RepoContext,
 ): Promise<ParallelFixItemResult> {
   const agentName = pickAgent(cluster, options.agent);
   const fixStartMs = Date.now();
@@ -165,6 +165,7 @@ async function executeFixInWorktree(
     }
 
     n("running-agent", { agent: agentName, branch });
+    const repoContext = repoCtx ? (formatContextForFile(repoCtx, cluster.file) || undefined) : undefined;
     const prompt = buildFixPrompt(cluster, repoContext);
     log("info", "Parallel fix", { agent: agentName, cluster: `${cluster.file}:${cluster.line}`, branch });
 
@@ -234,10 +235,9 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
   await pruneStaleWorktrees(absRepoPath);
 
   // Fingerprint repo for context (graceful degradation)
-  let repoContextString: string | undefined;
+  let repoCtx: RepoContext | undefined;
   try {
-    const ctx = await fingerprint(absRepoPath);
-    repoContextString = formatRepoContext(ctx) || undefined;
+    repoCtx = await fingerprint(absRepoPath);
   } catch {
     // Continue without context
   }
@@ -254,7 +254,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
       const idx = clusterIndex++;
       const p = executeFixInWorktree(
         clusters[idx]!, idx, clusters.length,
-        absRepoPath, baseBranch, options, notify, repoContextString,
+        absRepoPath, baseBranch, options, notify, repoCtx,
       ).then((item) => { results.push(item); })
        .finally(() => { pending.delete(p); });
       pending.add(p);
@@ -327,7 +327,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
             originalAgent: item.agent,
             originalDiff: item.diff,
             fixStartMs: Date.now(),
-            repoContext: repoContextString,
+            repoContext: repoCtx ? (formatContextForFile(repoCtx, cluster.file) || undefined) : undefined,
           });
           retryItem.branch = item.branch;
           retryItem.worktreePath = item.worktreePath;

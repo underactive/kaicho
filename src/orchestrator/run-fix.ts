@@ -13,7 +13,7 @@ import {
   keepFixBranch,
 } from "../branch/index.js";
 import { recordFix } from "../fix-log/index.js";
-import { fingerprint, formatRepoContext } from "../repo-context/index.js";
+import { fingerprint, formatContextForFile } from "../repo-context/index.js";
 import { log } from "../logger/index.js";
 
 export interface FixProgress {
@@ -110,7 +110,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
     let repoContextString: string | undefined;
     try {
       const ctx = await fingerprint(absRepoPath);
-      repoContextString = formatRepoContext(ctx) || undefined;
+      repoContextString = formatContextForFile(ctx, cluster.file) || undefined;
     } catch {
       // Continue without context
     }

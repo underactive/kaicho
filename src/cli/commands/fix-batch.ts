@@ -67,11 +67,11 @@ export async function handleParallelBatchFix(
     out.write(`\n  ${color("Batch complete:", "\x1b[1m")} ${result.totalApplied} applied, ${result.totalKept} kept, ${result.totalDiscarded} discarded, ${result.totalSkipped} skipped, ${result.totalFailed} failed (${duration}s)\n`);
 
     if (result.keptBranches.length > 0) {
-      out.write(`\n  ${color("Kept branches:", "\x1b[1m")}\n`);
+      out.write(`\n  ${color("Merged branches:", "\x1b[1m")}\n`);
       for (const branch of result.keptBranches) {
         out.write(`    ${color(branch, "\x1b[32m")}\n`);
       }
-      out.write(`\n  Merge with: ${color("git merge <branch>", "\x1b[90m")}\n\n`);
+      out.write("\n");
     } else {
       out.write("\n  No branches kept.\n\n");
     }

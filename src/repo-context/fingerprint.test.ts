@@ -120,7 +120,7 @@ path = "src/server.rs"
   });
 
   it("detects Python project with pytest (standard section header)", async () => {
-    serveFile("pyproject.toml", "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n");
+    serveFile("pyproject.toml", "[project]\nname = \"myapp\"\n\n[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n");
 
     const ctx = await fingerprint("/repo");
 
@@ -129,7 +129,7 @@ path = "src/server.rs"
   });
 
   it("detects Python project with pytest (spaces in section header)", async () => {
-    serveFile("pyproject.toml", "[ tool . pytest . ini_options ]\ntestpaths = [\"tests\"]\n");
+    serveFile("pyproject.toml", "[project]\nname = \"myapp\"\n\n[ tool . pytest . ini_options ]\ntestpaths = [\"tests\"]\n");
 
     const ctx = await fingerprint("/repo");
 
@@ -137,7 +137,7 @@ path = "src/server.rs"
   });
 
   it("detects Python project with pytest (short section header)", async () => {
-    serveFile("pyproject.toml", "[tool.pytest]\naddopts = \"-v\"\n");
+    serveFile("pyproject.toml", "[project]\nname = \"myapp\"\n\n[tool.pytest]\naddopts = \"-v\"\n");
 
     const ctx = await fingerprint("/repo");
 
