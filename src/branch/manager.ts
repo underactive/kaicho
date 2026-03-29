@@ -156,6 +156,22 @@ export async function mergeBranch(
 }
 
 /**
+ * Get the list of files changed between HEAD and a base branch.
+ * Used by batched fix to discover secondary file touches for informed grouping.
+ */
+export async function getChangedFiles(
+  repoPath: string,
+  baseBranch: string,
+): Promise<string[]> {
+  const result = await execa("git", ["diff", "--name-only", baseBranch], {
+    cwd: repoPath,
+    reject: false,
+  });
+  if (!result.stdout.trim()) return [];
+  return result.stdout.trim().split("\n").filter(Boolean);
+}
+
+/**
  * Revert the most recent merge commit.
  * Used by sweep to undo a layer's fixes when regressions are detected.
  */

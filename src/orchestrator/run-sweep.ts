@@ -1,12 +1,11 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { runScan, type MultiScanResult } from "./run-scan.js";
-import { runParallelFix, type ParallelFixResult } from "./run-parallel-fix.js";
+import { runBatchedFix, type BatchedFixResult } from "./batched-fix.js";
 import {
   ensureCleanWorkTree,
   getCurrentBranch,
   createFixBranch,
-  mergeBranch,
   revertMergeCommit,
 } from "../branch/index.js";
 import { loadFixLog } from "../fix-log/index.js";
@@ -64,29 +63,6 @@ async function filterFixed(
   const fixLog = await loadFixLog(absRepoPath);
   const fixedIds = new Set(fixLog.map((f) => f.clusterId));
   return clusters.filter((c) => !fixedIds.has(c.id));
-}
-
-/**
- * Merge kept fix branches into the current branch.
- * Returns successfully merged branch names.
- */
-async function mergeFixBranches(
-  absRepoPath: string,
-  branches: string[],
-): Promise<string[]> {
-  const merged: string[] = [];
-  for (const branch of branches) {
-    try {
-      await mergeBranch(absRepoPath, branch);
-      merged.push(branch);
-    } catch (err) {
-      log("warn", "Failed to merge fix branch, skipping", {
-        branch,
-        error: String(err),
-      });
-    }
-  }
-  return merged;
 }
 
 /**
@@ -177,8 +153,8 @@ async function executeLayer(
     return { result, criticalHigh: countCriticalHigh(clusters) };
   }
 
-  // 3. Fix
-  const fixResult: ParallelFixResult = await runParallelFix({
+  // 3. Fix (batched: file-disjoint grouping, merge between batches)
+  const fixResult: BatchedFixResult = await runBatchedFix({
     repoPath: absRepoPath,
     clusters: toFix,
     agent: options.agents?.[0],
@@ -193,10 +169,10 @@ async function executeLayer(
     onConfirm: options.onConfirm,
   });
 
-  // 4. Merge kept fix branches into sweep branch
-  const mergedBranches = await mergeFixBranches(absRepoPath, fixResult.keptBranches);
+  // Branches already merged inside runBatchedFix
+  const mergedBranches = fixResult.keptBranches;
 
-  // 5. Regression check (skip for first layer)
+  // 4. Regression check (skip for first layer)
   const regressions: SweepRegression[] = [];
   if (prevLayer && mergedBranches.length > 0) {
     const regression = await checkRegressions(

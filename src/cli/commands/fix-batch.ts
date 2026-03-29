@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
-import { runParallelFix, type ParallelFixItemResult, type ParallelFixConfirmResult } from "../../orchestrator/index.js";
+import { runBatchedFix, type ParallelFixItemResult, type ParallelFixConfirmResult } from "../../orchestrator/index.js";
 import { loadConfig } from "../../config/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 
@@ -29,7 +29,7 @@ export async function handleParallelBatchFix(
   out.write(`\n  Parallel fixing ${clusters.length} finding${clusters.length === 1 ? "" : "s"} (up to 3 concurrent)${isAuto ? " (auto)" : ""}${doValidate ? " + validation" : ""}...\n\n`);
 
   try {
-    const result = await runParallelFix({
+    const result = await runBatchedFix({
       repoPath: rawRepo,
       clusters,
       agent: opts["agent"] as string | undefined,

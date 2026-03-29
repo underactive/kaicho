@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SWEEP_LAYERS, DEFAULT_MAX_ROUNDS, countCriticalHigh } from "./sweep-types.js";
 
 const {
-  mockRunScan, mockRunParallelFix,
+  mockRunScan, mockRunBatchedFix,
   mockEnsureClean, mockGetCurrentBranch, mockCreateFixBranch, mockMergeBranch, mockRevertMergeCommit,
   mockLoadFixLog, mockWriteSweepReport, mockWriteSweepRegressions,
 } = vi.hoisted(() => ({
   mockRunScan: vi.fn(),
-  mockRunParallelFix: vi.fn(),
+  mockRunBatchedFix: vi.fn(),
   mockEnsureClean: vi.fn().mockResolvedValue(undefined),
   mockGetCurrentBranch: vi.fn().mockResolvedValue("main"),
   mockCreateFixBranch: vi.fn().mockResolvedValue({ branch: "kaicho/fix-sweep", previousBranch: "main" }),
@@ -22,8 +22,8 @@ vi.mock("./run-scan.js", () => ({
   runScan: mockRunScan,
 }));
 
-vi.mock("./run-parallel-fix.js", () => ({
-  runParallelFix: mockRunParallelFix,
+vi.mock("./batched-fix.js", () => ({
+  runBatchedFix: mockRunBatchedFix,
 }));
 
 vi.mock("../branch/index.js", () => ({
@@ -86,7 +86,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Default: scans return no findings, fixes return no kept branches
   mockRunScan.mockResolvedValue(makeScanResult([]));
-  mockRunParallelFix.mockResolvedValue(makeFixResult());
+  mockRunBatchedFix.mockResolvedValue(makeFixResult());
 });
 
 describe("sweep-types", () => {
@@ -152,12 +152,13 @@ describe("runSweep", () => {
       return makeScanResult([]);
     });
 
-    mockRunParallelFix.mockResolvedValue(makeFixResult(["kaicho/fix-vuln1"]));
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-vuln1"]));
 
     const report = await runSweep({ repoPath: "/repo", auto: true, maxRounds: 1 });
 
-    expect(mockRunParallelFix).toHaveBeenCalled();
-    expect(mockMergeBranch).toHaveBeenCalledWith(expect.any(String), "kaicho/fix-vuln1");
+    expect(mockRunBatchedFix).toHaveBeenCalled();
+    // Merging now happens inside runBatchedFix, so keptBranches reflects what was merged
+    expect(report.rounds[0]!.layers[0]!.keptBranches).toContain("kaicho/fix-vuln1");
     expect(report.rounds[0]!.layers[0]!.fixed).toBe(1);
   });
 
@@ -179,7 +180,7 @@ describe("runSweep", () => {
       return makeScanResult([]);
     });
 
-    mockRunParallelFix.mockResolvedValue(makeFixResult(["kaicho/fix-qa1"]));
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-qa1"]));
 
     const report = await runSweep({ repoPath: "/repo", auto: true, maxRounds: 1 });
 
@@ -192,7 +193,7 @@ describe("runSweep", () => {
   it("stops after max rounds", async () => {
     // Always return findings so exit condition never met
     mockRunScan.mockResolvedValue(makeScanResult([makeCluster("persistent", "high")]));
-    mockRunParallelFix.mockResolvedValue(makeFixResult());
+    mockRunBatchedFix.mockResolvedValue(makeFixResult());
 
     const report = await runSweep({ repoPath: "/repo", auto: true, maxRounds: 2 });
 
@@ -211,7 +212,7 @@ describe("runSweep", () => {
       return makeScanResult([makeCluster("low-issue", "low")]);
     });
 
-    mockRunParallelFix.mockImplementation(async () => {
+    mockRunBatchedFix.mockImplementation(async () => {
       round++;
       return makeFixResult(["kaicho/fix-sec1"]);
     });
