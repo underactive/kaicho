@@ -85,7 +85,7 @@ describe("buildCommitMessage", () => {
   it("includes rationales from each agent", () => {
     const msg = buildCommitMessage(makeCluster(), "claude");
     expect(msg).toContain("Claude: SQL injection via string concatenation");
-    expect(msg).toContain("codex: User input interpolated into query");
+    expect(msg).toContain("Codex: User input interpolated into query");
   });
 
   it("includes suggested change when present", () => {
