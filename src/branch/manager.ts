@@ -16,7 +16,7 @@ export interface BranchResult {
  * Refuses to run fix on a dirty tree to avoid mixing changes.
  */
 export async function ensureCleanWorkTree(repoPath: string): Promise<void> {
-  const result = await execa("git", ["status", "--porcelain"], {
+  const result = await execa("git", ["status", "--porcelain", "-uno"], {
     cwd: repoPath,
     reject: false,
   });
