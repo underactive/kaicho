@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SuggestionCluster } from "../dedup/index.js";
+import type { ParallelFixProgress } from "./run-parallel-fix.js";
 
 const {
   mockRunParallelFix, mockMergeBranch, mockGetChangedFiles,
@@ -256,5 +257,67 @@ describe("runBatchedFix", () => {
     expect(batchClusters[1]).toEqual(["d"]);
     expect(batchClusters[2]).toEqual(["e"]);
     expect(mockRunParallelFix).toHaveBeenCalledTimes(3);
+  });
+
+  it("reports global progress across batches", async () => {
+    // a1 + b1 = batch 1 (disjoint), a2 conflicts → batch 2
+    const clusters = [
+      makeCluster("a1", "src/a.ts"),
+      makeCluster("b1", "src/b.ts"),
+      makeCluster("a2", "src/a.ts"),
+    ];
+
+    const events: ParallelFixProgress[] = [];
+
+    mockRunParallelFix.mockImplementation(async (opts: {
+      clusters: SuggestionCluster[];
+      onProgress?: (p: ParallelFixProgress) => void;
+    }) => {
+      for (let i = 0; i < opts.clusters.length; i++) {
+        opts.onProgress?.({
+          current: i + 1, total: opts.clusters.length,
+          clusterId: opts.clusters[i]!.id, file: opts.clusters[i]!.file,
+          step: "applied",
+        });
+      }
+      // runParallelFix emits a per-batch "done"
+      opts.onProgress?.({
+        current: opts.clusters.length, total: opts.clusters.length,
+        clusterId: "", file: "", step: "done",
+      });
+      return makeParallelResult(opts.clusters.map((c: SuggestionCluster) => `br-${c.id}`));
+    });
+
+    await runBatchedFix({
+      repoPath: "/repo", clusters, auto: true,
+      onProgress: (p) => events.push({ ...p }),
+    });
+
+    const nonDone = events.filter((e) => e.step !== "done");
+    // Global total is always 3
+    expect(nonDone.every((e) => e.total === 3)).toBe(true);
+    // Global current goes 1, 2, 3 (not 1, 2 then 1 again)
+    expect(nonDone.map((e) => e.current)).toEqual([1, 2, 3]);
+
+    // Exactly one final "done" (per-batch ones suppressed)
+    const doneEvents = events.filter((e) => e.step === "done");
+    expect(doneEvents).toHaveLength(1);
+    expect(doneEvents[0]!.current).toBe(3);
+    expect(doneEvents[0]!.total).toBe(3);
+  });
+
+  it("emits no progress events when onProgress is not provided", async () => {
+    const clusters = [makeCluster("a", "src/a.ts")];
+    mockRunParallelFix.mockImplementation(async (opts: {
+      onProgress?: (p: ParallelFixProgress) => void;
+    }) => {
+      // Should not crash when onProgress is undefined
+      opts.onProgress?.({ current: 1, total: 1, clusterId: "a", file: "src/a.ts", step: "applied" });
+      opts.onProgress?.({ current: 1, total: 1, clusterId: "", file: "", step: "done" });
+      return makeParallelResult(["br-a"]);
+    });
+
+    // No onProgress — should not throw
+    await expect(runBatchedFix({ repoPath: "/repo", clusters, auto: true })).resolves.toBeDefined();
   });
 });

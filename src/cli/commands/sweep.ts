@@ -4,6 +4,14 @@ import { Command } from "commander";
 import { runSweep } from "../../orchestrator/run-sweep.js";
 import { loadConfig, DEFAULT_TIMEOUT_MS } from "../../config/index.js";
 import { DEFAULT_MAX_ROUNDS, type SweepLayer, type SweepLayerResult, type SweepRoundResult } from "../../orchestrator/sweep-types.js";
+import type { ParallelFixProgress } from "../../orchestrator/run-parallel-fix.js";
+
+const NO_COLOR = "NO_COLOR" in process.env;
+
+function color(text: string, code: string): string {
+  if (NO_COLOR) return text;
+  return `${code}${text}\x1b[0m`;
+}
 
 export const sweepCommand = new Command("sweep")
   .description("Run a layered, multi-round scan-fix-verify loop across all task types")
@@ -64,6 +72,23 @@ export const sweepCommand = new Command("sweep")
       }
     };
 
+    const onFixProgress = (p: ParallelFixProgress): void => {
+      if (isTTY) {
+        if (p.step === "creating-worktree") {
+          const summaryLine = p.summary ? `\n         ${color(p.summary, "\x1b[37m")}` : "";
+          process.stderr.write(`    ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${p.file} — ${p.agent} starting...${summaryLine}\n`);
+        } else if (p.step === "applied") {
+          process.stderr.write(`    ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("applied", "\x1b[32m")} → ${color(p.branch ?? "", "\x1b[1m")} (${p.filesChanged} file${p.filesChanged === 1 ? "" : "s"})\n`);
+        } else if (p.step === "no-changes") {
+          process.stderr.write(`    ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("no changes", "\x1b[33m")}\n`);
+        } else if (p.step === "failed") {
+          process.stderr.write(`    ${color(`[${p.current}/${p.total}]`, "\x1b[90m")} ${p.clusterId} ${color("failed", "\x1b[31m")} — ${p.error}\n`);
+        }
+      } else {
+        process.stderr.write(JSON.stringify({ type: "sweep.fix-progress", ...p }) + "\n");
+      }
+    };
+
     if (isTTY) {
       process.stderr.write(`\n═══ Sweep starting (max ${maxRounds} rounds) ═══\n`);
     }
@@ -84,6 +109,7 @@ export const sweepCommand = new Command("sweep")
       onLayerStart,
       onLayerComplete,
       onRoundComplete,
+      onFixProgress,
     });
 
     // Final summary

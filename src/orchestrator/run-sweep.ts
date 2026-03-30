@@ -166,6 +166,7 @@ async function executeLayer(
     verbose: options.verbose,
     validate: options.validate,
     reviewer: options.reviewer,
+    onProgress: options.onFixProgress,
     onConfirm: options.onConfirm,
   });
 

@@ -1,6 +1,6 @@
 import type { ScanTask } from "../prompts/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
-import type { ParallelFixOptions } from "./run-parallel-fix.js";
+import type { ParallelFixOptions, ParallelFixProgress } from "./run-parallel-fix.js";
 
 // --- Layer definition ---
 
@@ -39,6 +39,7 @@ export interface SweepOptions {
   onLayerStart?: (round: number, layer: SweepLayer) => void;
   onLayerComplete?: (round: number, result: SweepLayerResult) => void;
   onRoundComplete?: (result: SweepRoundResult) => void;
+  onFixProgress?: (progress: ParallelFixProgress) => void;
   onConfirm?: ParallelFixOptions["onConfirm"];
 }
 

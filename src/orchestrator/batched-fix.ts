@@ -123,6 +123,9 @@ async function mergeAndRecord(
 /**
  * Run a sequence of batches, returning the batch counter for continuity.
  * Shared logic for both parallel-only and serial-allowed phases.
+ *
+ * `progress.offset` tracks how many clusters have been dispatched across
+ * all previous batches so per-batch counters can be remapped to global.
  */
 async function runBatchLoop(
   options: BatchedFixOptions,
@@ -133,6 +136,8 @@ async function runBatchLoop(
   concurrency: number,
   batchNum: number,
   allowSerial: boolean,
+  progress: { offset: number },
+  globalTotal: number,
 ): Promise<{ remaining: SuggestionCluster[]; batchNum: number }> {
   while (remaining.length > 0) {
     batchNum++;
@@ -148,6 +153,19 @@ async function runBatchLoop(
       touchedFiles: touchedFiles.size,
     });
 
+    // Wrap onProgress to remap batch-local counters to global position
+    const currentOffset = progress.offset;
+    const wrappedProgress: typeof options.onProgress = options.onProgress
+      ? (p) => {
+          if (p.step === "done") return; // suppress per-batch done
+          options.onProgress!({
+            ...p,
+            current: currentOffset + p.current,
+            total: globalTotal,
+          });
+        }
+      : undefined;
+
     const batchResult: ParallelFixResult = await runParallelFix({
       repoPath: options.repoPath,
       clusters: batch,
@@ -160,10 +178,11 @@ async function runBatchLoop(
       verbose: options.verbose,
       validate: options.validate,
       reviewer: options.reviewer,
-      onProgress: options.onProgress,
+      onProgress: wrappedProgress,
       onConfirm: options.onConfirm,
     });
 
+    progress.offset += batch.length;
     allItems.push(...batchResult.items);
 
     const merged = await mergeAndRecord(
@@ -199,11 +218,13 @@ export async function runBatchedFix(options: BatchedFixOptions): Promise<Batched
   const allItems: ParallelFixItemResult[] = [];
   const allKeptBranches: string[] = [];
   let remaining = [...options.clusters];
+  const globalTotal = options.clusters.length;
+  const progress = { offset: 0 };
 
   // Phase 1: exhaust all file-disjoint parallel batches (no serial fallback)
   let { remaining: afterParallel, batchNum } = await runBatchLoop(
     options, remaining, touchedFiles, allItems, allKeptBranches,
-    concurrency, 0, false,
+    concurrency, 0, false, progress, globalTotal,
   );
 
   // Phase 2: serial fixes + new parallel opportunities
@@ -216,8 +237,19 @@ export async function runBatchedFix(options: BatchedFixOptions): Promise<Batched
 
     ({ remaining: afterParallel, batchNum } = await runBatchLoop(
       options, afterParallel, touchedFiles, allItems, allKeptBranches,
-      concurrency, batchNum, true,
+      concurrency, batchNum, true, progress, globalTotal,
     ));
+  }
+
+  // Single final "done" event (per-batch "done" events are suppressed)
+  if (globalTotal > 0) {
+    options.onProgress?.({
+      current: globalTotal,
+      total: globalTotal,
+      clusterId: "",
+      file: "",
+      step: "done",
+    });
   }
 
   return {
