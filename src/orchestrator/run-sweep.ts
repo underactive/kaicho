@@ -2,12 +2,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { runScan, type MultiScanResult } from "./run-scan.js";
 import { runBatchedFix, type BatchedFixResult } from "./batched-fix.js";
+import { execa } from "execa";
 import {
   ensureCleanWorkTree,
   createSweepWorktree,
   removeFixWorktree,
   pruneStaleWorktrees,
-  revertMergeCommit,
 } from "../branch/index.js";
 import { loadFixLog } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
@@ -67,23 +67,29 @@ async function filterFixed(
 }
 
 /**
- * Revert merged branches by reverting merge commits in reverse order.
+ * Revert the last N merge commits (one per merged branch).
+ *
+ * Previous implementation called `git revert HEAD` N times, but each
+ * revert moves HEAD — so the second call reverts the revert (reapply),
+ * causing a flapping chain. Instead, revert the range in one shot.
  */
 async function revertMerges(
   absRepoPath: string,
   mergedBranches: string[],
 ): Promise<void> {
-  for (let i = mergedBranches.length - 1; i >= 0; i--) {
-    try {
-      await revertMergeCommit(absRepoPath);
-      log("info", "Reverted merge", { branch: mergedBranches[i] });
-    } catch (err) {
-      log("warn", "Failed to revert merge", {
-        branch: mergedBranches[i],
-        error: String(err),
-      });
-      break;
-    }
+  const n = mergedBranches.length;
+  if (n === 0) return;
+
+  try {
+    await execa("git", ["revert", "--no-edit", `HEAD~${n}..HEAD`], {
+      cwd: absRepoPath,
+    });
+    log("info", "Reverted merges", { count: n, branches: mergedBranches });
+  } catch (err) {
+    log("warn", "Failed to revert merges", {
+      branches: mergedBranches,
+      error: String(err),
+    });
   }
 }
 

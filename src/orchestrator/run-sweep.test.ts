@@ -3,7 +3,7 @@ import { SWEEP_LAYERS, DEFAULT_MAX_ROUNDS, countCriticalHigh } from "./sweep-typ
 
 const {
   mockRunScan, mockRunBatchedFix,
-  mockEnsureClean, mockCreateSweepWorktree, mockRemoveFixWorktree, mockPruneStaleWorktrees, mockRevertMergeCommit,
+  mockEnsureClean, mockCreateSweepWorktree, mockRemoveFixWorktree, mockPruneStaleWorktrees, mockExeca,
   mockLoadFixLog, mockWriteSweepReport, mockWriteSweepRegressions,
 } = vi.hoisted(() => ({
   mockRunScan: vi.fn(),
@@ -12,7 +12,7 @@ const {
   mockCreateSweepWorktree: vi.fn().mockResolvedValue({ worktreePath: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345", branch: "kaicho/sweep-abc12345" }),
   mockRemoveFixWorktree: vi.fn().mockResolvedValue(undefined),
   mockPruneStaleWorktrees: vi.fn().mockResolvedValue(undefined),
-  mockRevertMergeCommit: vi.fn().mockResolvedValue(undefined),
+  mockExeca: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "", stderr: "" }),
   mockLoadFixLog: vi.fn().mockResolvedValue([]),
   mockWriteSweepReport: vi.fn().mockResolvedValue("/repo/.kaicho/sweep-report.json"),
   mockWriteSweepRegressions: vi.fn().mockResolvedValue("/repo/.kaicho/sweep-regressions.json"),
@@ -26,12 +26,15 @@ vi.mock("./batched-fix.js", () => ({
   runBatchedFix: mockRunBatchedFix,
 }));
 
+vi.mock("execa", () => ({
+  execa: mockExeca,
+}));
+
 vi.mock("../branch/index.js", () => ({
   ensureCleanWorkTree: mockEnsureClean,
   createSweepWorktree: mockCreateSweepWorktree,
   removeFixWorktree: mockRemoveFixWorktree,
   pruneStaleWorktrees: mockPruneStaleWorktrees,
-  revertMergeCommit: mockRevertMergeCommit,
 }));
 
 vi.mock("../fix-log/index.js", () => ({
@@ -235,7 +238,11 @@ describe("runSweep", () => {
     // QA layer should have detected regression and reverted
     const qaLayer = report.rounds[0]!.layers[1];
     expect(qaLayer!.regressions.length).toBeGreaterThan(0);
-    expect(mockRevertMergeCommit).toHaveBeenCalled();
+    expect(mockExeca).toHaveBeenCalledWith(
+      "git",
+      ["revert", "--no-edit", "HEAD~1..HEAD"],
+      expect.objectContaining({ cwd: expect.any(String) }),
+    );
   });
 
   it("stops after max rounds", async () => {

@@ -58,8 +58,9 @@ export const sweepCommand = new Command("sweep")
         const regMsg = result.regressions.length > 0
           ? ` | ${result.regressions.length} regressions (reverted)`
           : "";
+        const elapsed = (result.durationMs / 1000).toFixed(1);
         process.stderr.write(
-          `  Layer ${result.layer}: ${result.findings} findings → ${result.fixed} fixed, ${result.skipped} skipped, ${result.failed} failed${regMsg}\n`,
+          `  Layer ${result.layer}: ${result.findings} findings → ${result.fixed} fixed, ${result.skipped} skipped, ${result.failed} failed${regMsg} (${elapsed}s)\n`,
         );
       }
     };
