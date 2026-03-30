@@ -254,27 +254,31 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
 
       for (let i = 0; i < SWEEP_LAYERS.length; i++) {
         const layer = SWEEP_LAYERS[i]!;
-        const { result, criticalHigh } = await executeLayer(
-          round, layer, i, sweepWorktreePath, absRepoPath, options, prevLayer, prevCriticalHigh,
-        );
+        try {
+          const { result, criticalHigh } = await executeLayer(
+            round, layer, i, sweepWorktreePath, absRepoPath, options, prevLayer, prevCriticalHigh,
+          );
 
-        layerResults.push(result);
-        options.onLayerComplete?.(round, result);
+          layerResults.push(result);
+          options.onLayerComplete?.(round, result);
 
-        // Track regressions for final report
-        for (const reg of result.regressions) {
-          allRegressions.push({
-            round,
-            layer: layer.layer,
-            previousLayerTasks: reg.previousLayerTasks,
-            revertedBranches: reg.revertedBranches,
-            newCriticalHighCount: reg.newFindingCount,
-            details: reg.details,
-          });
+          // Track regressions for final report
+          for (const reg of result.regressions) {
+            allRegressions.push({
+              round,
+              layer: layer.layer,
+              previousLayerTasks: reg.previousLayerTasks,
+              revertedBranches: reg.revertedBranches,
+              newCriticalHighCount: reg.newFindingCount,
+              details: reg.details,
+            });
+          }
+
+          prevLayer = layer;
+          prevCriticalHigh = criticalHigh;
+        } catch (err) {
+          log("error", "Layer failed, continuing", { round, layer: layer.layer, error: String(err) });
         }
-
-        prevLayer = layer;
-        prevCriticalHigh = criticalHigh;
       }
 
       const roundResult: SweepRoundResult = {
@@ -283,21 +287,27 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
         totalFindings: layerResults.reduce((s, l) => s + l.findings, 0),
         totalFixed: layerResults.reduce((s, l) => s + l.fixed, 0),
         totalRegressions: layerResults.reduce((s, l) => s + l.regressions.length, 0),
-        criticalHighRemaining: 0, // computed below
+        criticalHighRemaining: 0, // updated below if exit scan succeeds
         durationMs: Date.now() - roundStartMs,
       };
 
-      // Check exit condition: re-scan security + qa for critical/high
-      const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
-      const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
-      const remainingCriticalHigh =
-        countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
-      roundResult.criticalHighRemaining = remainingCriticalHigh;
-
+      // Push round data immediately so it survives exit-scan failures
       rounds.push(roundResult);
+
+      // Check exit condition: re-scan security + qa for critical/high
+      try {
+        const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
+        const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
+        const remainingCriticalHigh =
+          countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
+        roundResult.criticalHighRemaining = remainingCriticalHigh;
+      } catch (err) {
+        log("warn", "Exit condition scan failed", { error: String(err) });
+      }
+
       options.onRoundComplete?.(roundResult);
 
-      if (remainingCriticalHigh === 0) {
+      if (roundResult.criticalHighRemaining === 0) {
         exitReason = "zero-critical-high";
         log("info", "Sweep exit: zero critical/high in security + qa", { round });
         break;
