@@ -50,7 +50,7 @@ describe("createSweepWorktree", () => {
     const result = await createSweepWorktree("/repo");
 
     expect(result.branch).toMatch(/^kaicho\/sweep-[0-9a-f]{8}$/);
-    expect(result.worktreePath).toContain("kaicho-wt-");
+    expect(result.worktreePath).toContain("kaicho-sweep-");
 
     expect(mockExeca).toHaveBeenCalledWith(
       "git",

@@ -9,7 +9,7 @@ const {
   mockRunScan: vi.fn(),
   mockRunBatchedFix: vi.fn(),
   mockEnsureClean: vi.fn().mockResolvedValue(undefined),
-  mockCreateSweepWorktree: vi.fn().mockResolvedValue({ worktreePath: "/tmp/kaicho-wt-1234/kaicho-sweep-abc12345", branch: "kaicho/sweep-abc12345" }),
+  mockCreateSweepWorktree: vi.fn().mockResolvedValue({ worktreePath: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345", branch: "kaicho/sweep-abc12345" }),
   mockRemoveFixWorktree: vi.fn().mockResolvedValue(undefined),
   mockPruneStaleWorktrees: vi.fn().mockResolvedValue(undefined),
   mockRevertMergeCommit: vi.fn().mockResolvedValue(undefined),
@@ -135,7 +135,7 @@ describe("runSweep", () => {
 
     expect(mockRemoveFixWorktree).toHaveBeenCalledWith(
       expect.stringContaining("/repo"),
-      "/tmp/kaicho-wt-1234/kaicho-sweep-abc12345",
+      "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345",
       "kaicho/sweep-abc12345",
       false,
     );
@@ -156,7 +156,7 @@ describe("runSweep", () => {
 
     expect(mockRunBatchedFix).toHaveBeenCalledWith(
       expect.objectContaining({
-        repoPath: "/tmp/kaicho-wt-1234/kaicho-sweep-abc12345",
+        repoPath: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345",
         fixLogPath: expect.stringContaining("/repo"),
       }),
     );

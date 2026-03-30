@@ -48,7 +48,8 @@ export async function createFixWorktree(repoPath: string): Promise<{
 
 /**
  * Create an isolated git worktree for a sweep branch.
- * Same mechanics as createFixWorktree but uses the kaicho/sweep- prefix.
+ * Uses a separate base directory from fix worktrees so that
+ * cleanupWorktreeBase() (which nukes the fix base) doesn't destroy it.
  */
 export async function createSweepWorktree(repoPath: string): Promise<{
   worktreePath: string;
@@ -56,7 +57,7 @@ export async function createSweepWorktree(repoPath: string): Promise<{
 }> {
   const shortHash = randomBytes(4).toString("hex");
   const branch = `${SWEEP_BRANCH_PREFIX}${shortHash}`;
-  const basePath = getWorktreeBasePath();
+  const basePath = path.join(os.tmpdir(), `kaicho-sweep-${process.pid}`);
   const worktreePath = path.join(basePath, branch.replace("/", "-"));
 
   await fs.mkdir(basePath, { recursive: true });
