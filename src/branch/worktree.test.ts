@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createFixWorktree, removeFixWorktree, pruneStaleWorktrees } from "./worktree.js";
+import { createFixWorktree, createSweepWorktree, removeFixWorktree, pruneStaleWorktrees } from "./worktree.js";
 
 vi.mock("execa", () => ({
   execa: vi.fn(),
@@ -35,6 +35,21 @@ describe("createFixWorktree", () => {
     const result = await createFixWorktree("/repo");
 
     expect(result.branch).toMatch(/^kaicho\/fix-[0-9a-f]{8}$/);
+    expect(result.worktreePath).toContain("kaicho-wt-");
+
+    expect(mockExeca).toHaveBeenCalledWith(
+      "git",
+      ["worktree", "add", "-b", result.branch, result.worktreePath, "HEAD"],
+      expect.objectContaining({ cwd: "/repo" }),
+    );
+  });
+});
+
+describe("createSweepWorktree", () => {
+  it("creates a worktree with a sweep branch at HEAD", async () => {
+    const result = await createSweepWorktree("/repo");
+
+    expect(result.branch).toMatch(/^kaicho\/sweep-[0-9a-f]{8}$/);
     expect(result.worktreePath).toContain("kaicho-wt-");
 
     expect(mockExeca).toHaveBeenCalledWith(

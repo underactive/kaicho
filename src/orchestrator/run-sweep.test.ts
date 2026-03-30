@@ -3,15 +3,15 @@ import { SWEEP_LAYERS, DEFAULT_MAX_ROUNDS, countCriticalHigh } from "./sweep-typ
 
 const {
   mockRunScan, mockRunBatchedFix,
-  mockEnsureClean, mockGetCurrentBranch, mockCreateFixBranch, mockMergeBranch, mockRevertMergeCommit,
+  mockEnsureClean, mockCreateSweepWorktree, mockRemoveFixWorktree, mockPruneStaleWorktrees, mockRevertMergeCommit,
   mockLoadFixLog, mockWriteSweepReport, mockWriteSweepRegressions,
 } = vi.hoisted(() => ({
   mockRunScan: vi.fn(),
   mockRunBatchedFix: vi.fn(),
   mockEnsureClean: vi.fn().mockResolvedValue(undefined),
-  mockGetCurrentBranch: vi.fn().mockResolvedValue("main"),
-  mockCreateFixBranch: vi.fn().mockResolvedValue({ branch: "kaicho/fix-sweep", previousBranch: "main" }),
-  mockMergeBranch: vi.fn().mockResolvedValue(undefined),
+  mockCreateSweepWorktree: vi.fn().mockResolvedValue({ worktreePath: "/tmp/kaicho-wt-1234/kaicho-sweep-abc12345", branch: "kaicho/sweep-abc12345" }),
+  mockRemoveFixWorktree: vi.fn().mockResolvedValue(undefined),
+  mockPruneStaleWorktrees: vi.fn().mockResolvedValue(undefined),
   mockRevertMergeCommit: vi.fn().mockResolvedValue(undefined),
   mockLoadFixLog: vi.fn().mockResolvedValue([]),
   mockWriteSweepReport: vi.fn().mockResolvedValue("/repo/.kaicho/sweep-report.json"),
@@ -28,9 +28,9 @@ vi.mock("./batched-fix.js", () => ({
 
 vi.mock("../branch/index.js", () => ({
   ensureCleanWorkTree: mockEnsureClean,
-  getCurrentBranch: mockGetCurrentBranch,
-  createFixBranch: mockCreateFixBranch,
-  mergeBranch: mockMergeBranch,
+  createSweepWorktree: mockCreateSweepWorktree,
+  removeFixWorktree: mockRemoveFixWorktree,
+  pruneStaleWorktrees: mockPruneStaleWorktrees,
   revertMergeCommit: mockRevertMergeCommit,
 }));
 
@@ -120,11 +120,59 @@ describe("runSweep", () => {
     expect(report.remaining).toEqual([]);
   });
 
-  it("creates a sweep branch", async () => {
+  it("creates a sweep worktree", async () => {
     await runSweep({ repoPath: "/repo", auto: true });
 
     expect(mockEnsureClean).toHaveBeenCalled();
-    expect(mockCreateFixBranch).toHaveBeenCalled();
+    expect(mockPruneStaleWorktrees).toHaveBeenCalled();
+    expect(mockCreateSweepWorktree).toHaveBeenCalledWith(
+      expect.stringContaining("/repo"),
+    );
+  });
+
+  it("removes sweep worktree on completion", async () => {
+    await runSweep({ repoPath: "/repo", auto: true });
+
+    expect(mockRemoveFixWorktree).toHaveBeenCalledWith(
+      expect.stringContaining("/repo"),
+      "/tmp/kaicho-wt-1234/kaicho-sweep-abc12345",
+      "kaicho/sweep-abc12345",
+      false,
+    );
+  });
+
+  it("passes sweep worktree path to runBatchedFix and fixLogPath to original repo", async () => {
+    let callCount = 0;
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      callCount++;
+      if (opts.task === "security" && callCount === 1) {
+        return makeScanResult([makeCluster("vuln1")]);
+      }
+      return makeScanResult([]);
+    });
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-vuln1"]));
+
+    await runSweep({ repoPath: "/repo", auto: true, maxRounds: 1 });
+
+    expect(mockRunBatchedFix).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: "/tmp/kaicho-wt-1234/kaicho-sweep-abc12345",
+        fixLogPath: expect.stringContaining("/repo"),
+      }),
+    );
+  });
+
+  it("writes reports to original repo, not worktree", async () => {
+    await runSweep({ repoPath: "/repo", auto: true });
+
+    expect(mockWriteSweepReport).toHaveBeenCalledWith(
+      expect.stringContaining("/repo"),
+      expect.anything(),
+    );
+    expect(mockWriteSweepReport).not.toHaveBeenCalledWith(
+      expect.stringContaining("/tmp/kaicho-wt"),
+      expect.anything(),
+    );
   });
 
   it("scans all 7 layers in order", async () => {

@@ -33,6 +33,7 @@ export interface BatchedFixOptions {
   verbose?: boolean;
   validate?: boolean;
   reviewer?: string;
+  fixLogPath?: string;
   onProgress?: (progress: ParallelFixProgress) => void;
   onConfirm?: ParallelFixOptions["onConfirm"];
 }
@@ -178,6 +179,7 @@ async function runBatchLoop(
       verbose: options.verbose,
       validate: options.validate,
       reviewer: options.reviewer,
+      fixLogPath: options.fixLogPath,
       onProgress: wrappedProgress,
       onConfirm: options.onConfirm,
     });

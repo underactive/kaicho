@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { log } from "../logger/index.js";
 
 const BRANCH_PREFIX = "kaicho/fix-";
+const SWEEP_BRANCH_PREFIX = "kaicho/sweep-";
 
 /**
  * Base path for worktree directories, grouped by PID for easy cleanup.
@@ -42,6 +43,29 @@ export async function createFixWorktree(repoPath: string): Promise<{
   });
 
   log("info", "Created fix worktree", { branch, worktreePath });
+  return { worktreePath, branch };
+}
+
+/**
+ * Create an isolated git worktree for a sweep branch.
+ * Same mechanics as createFixWorktree but uses the kaicho/sweep- prefix.
+ */
+export async function createSweepWorktree(repoPath: string): Promise<{
+  worktreePath: string;
+  branch: string;
+}> {
+  const shortHash = randomBytes(4).toString("hex");
+  const branch = `${SWEEP_BRANCH_PREFIX}${shortHash}`;
+  const basePath = getWorktreeBasePath();
+  const worktreePath = path.join(basePath, branch.replace("/", "-"));
+
+  await fs.mkdir(basePath, { recursive: true });
+
+  await execa("git", ["worktree", "add", "-b", branch, worktreePath, "HEAD"], {
+    cwd: repoPath,
+  });
+
+  log("info", "Created sweep worktree", { branch, worktreePath });
   return { worktreePath, branch };
 }
 

@@ -15,6 +15,7 @@ export {
 
 export {
   createFixWorktree,
+  createSweepWorktree,
   removeFixWorktree,
   pruneStaleWorktrees,
   cleanupWorktreeBase,

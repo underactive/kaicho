@@ -133,7 +133,7 @@ export const sweepCommand = new Command("sweep")
       if (totalReg > 0) {
         process.stderr.write(`  Regressions: .kaicho/sweep-regressions.json\n`);
       }
-      process.stderr.write(`  Branch: ${report.sweepBranch}\n`);
+      process.stderr.write(`  Branch: ${report.sweepBranch} (not checked out)\n`);
     } else {
       process.stdout.write(JSON.stringify(report, null, 2) + "\n");
     }

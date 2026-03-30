@@ -83,6 +83,7 @@ export interface ParallelFixOptions {
   verbose?: boolean;
   validate?: boolean;
   reviewer?: string;
+  fixLogPath?: string;
   onProgress?: (progress: ParallelFixProgress) => void;
   onConfirm?: (
     item: ParallelFixItemResult,
@@ -227,6 +228,9 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
     ? path.join(os.homedir(), options.repoPath.slice(1))
     : options.repoPath;
   const absRepoPath = path.resolve(expanded);
+  const fixLogRoot = options.fixLogPath
+    ? path.resolve(options.fixLogPath)
+    : absRepoPath;
   const notify = options.onProgress ?? (() => {});
   const limit = options.concurrency ?? 3;
   const startMs = Date.now();
@@ -283,11 +287,11 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
       if (options.auto) {
         // Auto mode: keep approved, discard concerns
         if (item.validation?.verdict === "concern") {
-          await recordDiscardedFix(absRepoPath, buildDiscardedEntry(item, clusters[orderMap.get(item.clusterId)!]!, "auto-concern"));
+          await recordDiscardedFix(fixLogRoot, buildDiscardedEntry(item, clusters[orderMap.get(item.clusterId)!]!, "auto-concern"));
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
           totalDiscarded++;
         } else {
-          await recordFix(absRepoPath, {
+          await recordFix(fixLogRoot, {
             clusterId: item.clusterId, file: item.file,
             agent: item.agent, branch: item.branch,
             fixedAt: new Date().toISOString(),
@@ -300,7 +304,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
         const action = await options.onConfirm(item, clusters[orderMap.get(item.clusterId)!]!, i + 1, results.length);
 
         if (action === "keep") {
-          await recordFix(absRepoPath, {
+          await recordFix(fixLogRoot, {
             clusterId: item.clusterId, file: item.file,
             agent: item.agent, branch: item.branch,
             fixedAt: new Date().toISOString(),
@@ -309,7 +313,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
           keptBranches.push(item.branch);
           totalKept++;
         } else if (action === "discard") {
-          await recordDiscardedFix(absRepoPath, buildDiscardedEntry(item, clusters[orderMap.get(item.clusterId)!]!, "user-discard"));
+          await recordDiscardedFix(fixLogRoot, buildDiscardedEntry(item, clusters[orderMap.get(item.clusterId)!]!, "user-discard"));
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
           totalDiscarded++;
         } else if (typeof action === "object" && action.action === "retry") {
@@ -338,7 +342,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
             if (options.onConfirm) {
               const retryAction = await options.onConfirm(retryItem, cluster, i + 1, results.length);
               if (retryAction === "keep") {
-                await recordFix(absRepoPath, {
+                await recordFix(fixLogRoot, {
                   clusterId: retryItem.clusterId, file: retryItem.file,
                   agent: retryItem.agent, branch: retryItem.branch,
                   fixedAt: new Date().toISOString(),
@@ -347,13 +351,13 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
                 keptBranches.push(item.branch);
                 totalKept++;
               } else {
-                await recordDiscardedFix(absRepoPath, buildDiscardedEntry(retryItem, cluster, "user-discard"));
+                await recordDiscardedFix(fixLogRoot, buildDiscardedEntry(retryItem, cluster, "user-discard"));
                 await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
                 totalDiscarded++;
               }
             }
           } else {
-            await recordDiscardedFix(absRepoPath, buildDiscardedEntry(retryItem, cluster, "retry-failed"));
+            await recordDiscardedFix(fixLogRoot, buildDiscardedEntry(retryItem, cluster, "retry-failed"));
             await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
             totalDiscarded++;
           }

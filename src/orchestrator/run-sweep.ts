@@ -4,8 +4,9 @@ import { runScan, type MultiScanResult } from "./run-scan.js";
 import { runBatchedFix, type BatchedFixResult } from "./batched-fix.js";
 import {
   ensureCleanWorkTree,
-  getCurrentBranch,
-  createFixBranch,
+  createSweepWorktree,
+  removeFixWorktree,
+  pruneStaleWorktrees,
   revertMergeCommit,
 } from "../branch/index.js";
 import { loadFixLog } from "../fix-log/index.js";
@@ -118,6 +119,7 @@ async function executeLayer(
   round: number,
   layer: SweepLayer,
   layerIndex: number,
+  sweepWorktreePath: string,
   absRepoPath: string,
   options: SweepOptions,
   prevLayer: SweepLayer | null,
@@ -126,8 +128,8 @@ async function executeLayer(
   const startMs = Date.now();
   options.onLayerStart?.(round, layer);
 
-  // 1. Scan
-  const { clusters } = await scanLayer(layer, absRepoPath, options);
+  // 1. Scan (from worktree)
+  const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
   log("info", "Layer scan complete", {
     round,
     layer: layer.layer,
@@ -135,7 +137,7 @@ async function executeLayer(
     findings: clusters.length,
   });
 
-  // 2. Filter already-fixed
+  // 2. Filter already-fixed (fix-log lives in original repo)
   const toFix = await filterFixed(clusters, absRepoPath);
 
   if (toFix.length === 0) {
@@ -155,7 +157,7 @@ async function executeLayer(
 
   // 3. Fix (batched: file-disjoint grouping, merge between batches)
   const fixResult: BatchedFixResult = await runBatchedFix({
-    repoPath: absRepoPath,
+    repoPath: sweepWorktreePath,
     clusters: toFix,
     agent: options.agents?.[0],
     timeoutMs: options.timeoutMs,
@@ -166,6 +168,7 @@ async function executeLayer(
     verbose: options.verbose,
     validate: options.validate,
     reviewer: options.reviewer,
+    fixLogPath: absRepoPath,
     onProgress: options.onFixProgress,
     onConfirm: options.onConfirm,
   });
@@ -177,12 +180,12 @@ async function executeLayer(
   const regressions: SweepRegression[] = [];
   if (prevLayer && mergedBranches.length > 0) {
     const regression = await checkRegressions(
-      absRepoPath, prevLayer, prevCriticalHigh, options,
+      sweepWorktreePath, prevLayer, prevCriticalHigh, options,
     );
 
     if (regression) {
       regression.revertedBranches = [...mergedBranches];
-      await revertMerges(absRepoPath, mergedBranches);
+      await revertMerges(sweepWorktreePath, mergedBranches);
       regressions.push(regression);
       log("warn", "Regression detected, reverted layer fixes", {
         round,
@@ -193,7 +196,7 @@ async function executeLayer(
   }
 
   // Count post-fix critical/high for this layer (for next layer's regression baseline)
-  const postFixScan = await scanLayer(layer, absRepoPath, options);
+  const postFixScan = await scanLayer(layer, sweepWorktreePath, options);
   const criticalHigh = countCriticalHigh(postFixScan.clusters);
 
   const result: SweepLayerResult = {
@@ -224,10 +227,11 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
 
   await ensureCleanWorkTree(absRepoPath);
 
-  // Create sweep branch
-  const originalBranch = await getCurrentBranch(absRepoPath);
-  const { branch: sweepBranch } = await createFixBranch(absRepoPath);
-  log("info", "Created sweep branch", { sweepBranch, from: originalBranch });
+  // Create an isolated worktree for the sweep — user's checkout is never touched
+  await pruneStaleWorktrees(absRepoPath);
+  const { worktreePath: sweepWorktreePath, branch: sweepBranch } =
+    await createSweepWorktree(absRepoPath);
+  log("info", "Created sweep worktree", { sweepBranch, sweepWorktreePath });
 
   const rounds: SweepRoundResult[] = [];
   const allRegressions: SweepRegressionReport["regressions"] = [];
@@ -245,7 +249,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       for (let i = 0; i < SWEEP_LAYERS.length; i++) {
         const layer = SWEEP_LAYERS[i]!;
         const { result, criticalHigh } = await executeLayer(
-          round, layer, i, absRepoPath, options, prevLayer, prevCriticalHigh,
+          round, layer, i, sweepWorktreePath, absRepoPath, options, prevLayer, prevCriticalHigh,
         );
 
         layerResults.push(result);
@@ -278,8 +282,8 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       };
 
       // Check exit condition: re-scan security + qa for critical/high
-      const secScan = await scanLayer(SWEEP_LAYERS[0]!, absRepoPath, options);
-      const qaScan = await scanLayer(SWEEP_LAYERS[1]!, absRepoPath, options);
+      const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
+      const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
       const remainingCriticalHigh =
         countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
       roundResult.criticalHighRemaining = remainingCriticalHigh;
@@ -297,10 +301,10 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     log("error", "Sweep failed", { error: String(err) });
   }
 
-  // Collect remaining findings across all tasks
+  // Collect remaining findings across all tasks (scan worktree, fix-log from original repo)
   const remaining: SweepRemaining[] = [];
   for (const layer of SWEEP_LAYERS) {
-    const { clusters } = await scanLayer(layer, absRepoPath, options);
+    const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
     const unfixed = await filterFixed(clusters, absRepoPath);
     for (const c of unfixed) {
       remaining.push({
@@ -328,7 +332,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     remaining,
   };
 
-  // Write reports
+  // Write reports to original repo (not the worktree)
   await writeSweepReport(absRepoPath, report);
   if (allRegressions.length > 0) {
     await writeSweepRegressions(absRepoPath, {
@@ -336,6 +340,10 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       regressions: allRegressions,
     });
   }
+
+  // Clean up worktree but preserve the sweep branch for review
+  await removeFixWorktree(absRepoPath, sweepWorktreePath, sweepBranch, false)
+    .catch((err) => log("warn", "Failed to remove sweep worktree", { error: String(err) }));
 
   return report;
 }
