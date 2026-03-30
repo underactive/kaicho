@@ -100,7 +100,7 @@ export const sweepCommand = new Command("sweep")
       agents: agentsList,
       exclude: excludeList,
       timeoutMs: opts.timeout ? parseInt(opts.timeout as string, 10) : DEFAULT_TIMEOUT_MS,
-      models: config.models,
+      models: config.fixModels ?? config.models,
       scanModels: config.models,
       concurrency: opts.concurrency ? parseInt(opts.concurrency as string, 10) : config.concurrency ?? 3,
       validate: opts.validate === true,

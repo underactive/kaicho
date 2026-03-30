@@ -44,7 +44,7 @@ async function scanLayer(
       task,
       repoPath: absRepoPath,
       timeoutMs: options.timeoutMs,
-      models: options.models,
+      models: options.scanModels ?? options.models,
     });
     scanResults.push(result);
     allClusters.push(...result.clusters);

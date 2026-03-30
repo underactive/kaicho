@@ -74,8 +74,9 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
       summarizerModel: str(raw["summarizerModel"]),
       maxSweepRounds: num(raw["maxSweepRounds"]),
     };
-  } catch {
-    log("warn", "Invalid config file, ignoring", { path: configPath });
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : String(err);
+    log("warn", "Invalid config file, ignoring", { path: configPath, reason });
     return {};
   }
 }
