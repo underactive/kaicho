@@ -3,7 +3,7 @@ import type { SuggestionCluster } from "../dedup/index.js";
 import type { ParallelFixProgress } from "./run-parallel-fix.js";
 
 const {
-  mockRunParallelFix, mockMergeBranch, mockGetChangedFiles,
+  mockRunParallelFix, mockMergeBranch, mockAbortMerge, mockGetChangedFiles,
   mockEnsureClean, mockGetCurrentBranch, mockCreateWorktree,
   mockRemoveWorktree, mockPruneWorktrees, mockCleanupBase,
   mockCaptureDiff, mockCommitFix, mockRecordFix, mockRecordDiscardedFix,
@@ -11,6 +11,7 @@ const {
 } = vi.hoisted(() => ({
   mockRunParallelFix: vi.fn(),
   mockMergeBranch: vi.fn().mockResolvedValue(undefined),
+  mockAbortMerge: vi.fn().mockResolvedValue(undefined),
   mockGetChangedFiles: vi.fn().mockResolvedValue([]),
   mockEnsureClean: vi.fn().mockResolvedValue(undefined),
   mockGetCurrentBranch: vi.fn().mockResolvedValue("main"),
@@ -36,6 +37,7 @@ vi.mock("./run-parallel-fix.js", () => ({
 
 vi.mock("../branch/index.js", () => ({
   mergeBranch: mockMergeBranch,
+  abortMerge: mockAbortMerge,
   getChangedFiles: mockGetChangedFiles,
   ensureCleanWorkTree: mockEnsureClean,
   getCurrentBranch: mockGetCurrentBranch,
@@ -202,7 +204,7 @@ describe("runBatchedFix", () => {
     expect(mockRunParallelFix.mock.calls[1]![0].clusters).toHaveLength(2);
   });
 
-  it("handles merge failure gracefully", async () => {
+  it("handles merge failure gracefully and aborts the merge", async () => {
     const clusters = [makeCluster("a", "src/a.ts")];
     mockRunParallelFix.mockResolvedValue(makeParallelResult(["br-a"]));
     mockMergeBranch.mockRejectedValue(new Error("merge conflict"));
@@ -212,6 +214,65 @@ describe("runBatchedFix", () => {
     // Merge failed but didn't crash
     expect(result.keptBranches).toEqual([]);
     expect(result.totalKept).toBe(0);
+    // Working tree was cleaned up
+    expect(mockAbortMerge).toHaveBeenCalledWith("/repo");
+  });
+
+  it("defers merge-conflicted clusters for retry in next batch", async () => {
+    // Two disjoint files: a.ts and b.ts
+    // Fix for b.ts will conflict on merge (agent touched a.ts too)
+    const clusters = [
+      makeCluster("a", "src/a.ts"),
+      makeCluster("b", "src/b.ts"),
+    ];
+
+    function makeItemsWithMapping(
+      pairs: { clusterId: string; branch: string }[],
+    ) {
+      return {
+        items: pairs.map((p) => ({
+          clusterId: p.clusterId, file: "test.ts", agent: "claude",
+          branch: p.branch, worktreePath: "/tmp",
+          status: "applied" as const, filesChanged: 1, durationMs: 100, diff: "diff",
+        })),
+        keptBranches: pairs.map((p) => p.branch),
+        totalApplied: pairs.length, totalSkipped: 0, totalFailed: 0,
+        totalKept: pairs.length, totalDiscarded: 0, totalDurationMs: 100,
+      };
+    }
+
+    let batchNum = 0;
+    mockRunParallelFix.mockImplementation(async () => {
+      batchNum++;
+      if (batchNum === 1) {
+        return makeItemsWithMapping([
+          { clusterId: "a", branch: "br-a" },
+          { clusterId: "b", branch: "br-b" },
+        ]);
+      }
+      // Retry: only b runs, succeeds this time
+      return makeItemsWithMapping([{ clusterId: "b", branch: "br-b-retry" }]);
+    });
+
+    // First batch: br-a merges OK, br-b conflicts
+    mockMergeBranch
+      .mockResolvedValueOnce(undefined)   // br-a OK
+      .mockRejectedValueOnce(new Error("merge conflict"))  // br-b conflict
+      .mockResolvedValueOnce(undefined);  // br-b-retry OK (after retry)
+
+    mockGetChangedFiles.mockResolvedValue(["src/a.ts"]);
+
+    const result = await runBatchedFix({ repoPath: "/repo", clusters, auto: true });
+
+    // Should have run 2 batches: original + retry
+    expect(mockRunParallelFix).toHaveBeenCalledTimes(2);
+    // Retry batch should contain only cluster "b"
+    expect(mockRunParallelFix.mock.calls[1]![0].clusters).toHaveLength(1);
+    expect(mockRunParallelFix.mock.calls[1]![0].clusters[0].id).toBe("b");
+    // Both ended up merged
+    expect(result.totalKept).toBe(2);
+    // Abort was called for the failed merge
+    expect(mockAbortMerge).toHaveBeenCalledTimes(1);
   });
 
   it("returns empty result for empty clusters", async () => {

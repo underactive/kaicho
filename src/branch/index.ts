@@ -8,6 +8,7 @@ export {
   discardFixBranch,
   keepFixBranch,
   mergeBranch,
+  abortMerge,
   getChangedFiles,
   revertMergeCommit,
   type BranchResult,

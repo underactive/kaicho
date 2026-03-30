@@ -187,6 +187,17 @@ export async function getChangedFiles(
 }
 
 /**
+ * Abort an in-progress merge, restoring the working tree to HEAD.
+ * Used after a squash-merge conflict to clean up before the next merge.
+ */
+export async function abortMerge(repoPath: string): Promise<void> {
+  await execa("git", ["merge", "--abort"], {
+    cwd: repoPath,
+    reject: false,
+  });
+}
+
+/**
  * Revert the most recent commit.
  * Used by sweep to undo a layer's fixes when regressions are detected.
  */

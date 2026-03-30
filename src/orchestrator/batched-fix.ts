@@ -9,7 +9,7 @@ import {
   type ParallelFixItemAction,
   type ParallelFixRetryAction,
 } from "./run-parallel-fix.js";
-import { mergeBranch, getChangedFiles, getCurrentBranch } from "../branch/index.js";
+import { mergeBranch, abortMerge, getChangedFiles, getCurrentBranch } from "../branch/index.js";
 import { log } from "../logger/index.js";
 
 // Re-export types that callers need
@@ -90,14 +90,18 @@ function buildBatch(
 
 /**
  * Merge kept branches into the current branch and record which files were touched.
- * Returns the successfully merged branch names.
+ * Returns the successfully merged branch names and the branches that failed.
+ *
+ * On merge conflict, aborts the merge to restore a clean working tree so
+ * subsequent merges and batches are not blocked by leftover conflict state.
  */
 async function mergeAndRecord(
   repoPath: string,
   branches: string[],
   touchedFiles: Set<string>,
-): Promise<string[]> {
+): Promise<{ merged: string[]; failed: string[] }> {
   const merged: string[] = [];
+  const failed: string[] = [];
 
   for (const branch of branches) {
     try {
@@ -111,14 +115,16 @@ async function mergeAndRecord(
 
       merged.push(branch);
     } catch (err) {
-      log("warn", "Failed to merge fix branch, skipping", {
+      log("warn", "Failed to merge fix branch, deferring for retry", {
         branch,
         error: String(err),
       });
+      await abortMerge(repoPath);
+      failed.push(branch);
     }
   }
 
-  return merged;
+  return { merged, failed };
 }
 
 /**
@@ -187,10 +193,28 @@ async function runBatchLoop(
     progress.offset += batch.length;
     allItems.push(...batchResult.items);
 
-    const merged = await mergeAndRecord(
+    const { merged, failed } = await mergeAndRecord(
       options.repoPath, batchResult.keptBranches, touchedFiles,
     );
     allKeptBranches.push(...merged);
+
+    // Defer merge-conflicted clusters for retry in a later batch.
+    // The stale branch is deleted; runParallelFix will create a fresh one
+    // from the updated HEAD that includes the fixes that caused the conflict.
+    if (failed.length > 0) {
+      const failedSet = new Set(failed);
+      const failedClusterIds = new Set(
+        batchResult.items
+          .filter((item) => failedSet.has(item.branch))
+          .map((item) => item.clusterId),
+      );
+      const retryClusters = batch.filter((c) => failedClusterIds.has(c.id));
+      deferred.push(...retryClusters);
+      log("info", "Deferred merge-conflicted clusters for retry", {
+        count: retryClusters.length,
+        clusterIds: retryClusters.map((c) => c.id),
+      });
+    }
 
     remaining = deferred;
   }
