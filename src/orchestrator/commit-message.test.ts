@@ -122,4 +122,21 @@ describe("buildCommitMessage", () => {
     });
     expect(msg).toContain("Fixed by Codex and reviewed by Cursor, applied via Kaichō");
   });
+
+  it("strips inline model specifier from agent display name", () => {
+    const msg = buildCommitMessage(makeCluster(), "cursor:comp", "composer-2");
+    expect(msg).toContain("Fixed by Cursor (composer-2), applied via Kaichō");
+  });
+
+  it("falls back to inline model specifier when no explicit model provided", () => {
+    const msg = buildCommitMessage(makeCluster(), "cursor:comp");
+    expect(msg).toContain("Fixed by Cursor (comp), applied via Kaichō");
+  });
+
+  it("strips inline model specifier from reviewer display name", () => {
+    const msg = buildCommitMessage(makeCluster(), "cursor", "composer-2", undefined, {
+      name: "claude:sonnet[1m]",
+    });
+    expect(msg).toContain("reviewed by Claude (sonnet[1m])");
+  });
 });

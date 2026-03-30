@@ -62,17 +62,28 @@ export function buildCommitMessage(
     lines.push("", `Suggested change: ${cluster.suggestedChange}`);
   }
 
-  const agentDisplay = agent.charAt(0).toUpperCase() + agent.slice(1);
-  const modelSuffix = model ? ` (${model})` : "";
+  const fixer = formatAgent(agent, model);
   if (reviewer) {
-    const reviewerDisplay = reviewer.name.charAt(0).toUpperCase() + reviewer.name.slice(1);
-    const reviewerModel = reviewer.model ? ` (${reviewer.model})` : "";
-    lines.push("", `Fixed by ${agentDisplay}${modelSuffix} and reviewed by ${reviewerDisplay}${reviewerModel}, applied via Kaichō`);
+    const rev = formatAgent(reviewer.name, reviewer.model);
+    lines.push("", `Fixed by ${fixer} and reviewed by ${rev}, applied via Kaichō`);
   } else {
-    lines.push("", `Fixed by ${agentDisplay}${modelSuffix}, applied via Kaichō`);
+    lines.push("", `Fixed by ${fixer}, applied via Kaichō`);
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Format an agent name for display: strip the inline model specifier
+ * (e.g. "cursor:comp" → "Cursor") and show the model in parentheses.
+ * When no explicit model is provided, falls back to the inline specifier.
+ */
+function formatAgent(name: string, model?: string): string {
+  const hasInlineModel = name.includes(":");
+  const baseName = hasInlineModel ? name.split(":")[0]! : name;
+  const display = baseName.charAt(0).toUpperCase() + baseName.slice(1);
+  const resolvedModel = model ?? (hasInlineModel ? name.split(":")[1] : undefined);
+  return resolvedModel ? `${display} (${resolvedModel})` : display;
 }
 
 function truncate(text: string, maxLen: number): string {

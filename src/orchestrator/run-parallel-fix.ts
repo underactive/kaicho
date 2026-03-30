@@ -206,7 +206,8 @@ async function executeFixInWorktree(
       });
       validation = valResult;
       if (valResult.reviewer !== "none") {
-        reviewerInfo = { name: valResult.reviewer, model: resolveModel(valResult.reviewer, options.models) };
+        const reviewerModel = valResult.reviewer.includes(":") ? undefined : resolveModel(valResult.reviewer, options.models);
+        reviewerInfo = { name: valResult.reviewer, model: reviewerModel };
       }
     }
 
