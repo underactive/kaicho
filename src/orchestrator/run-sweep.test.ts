@@ -213,6 +213,35 @@ describe("runSweep", () => {
     expect(report.rounds[0]!.layers[0]!.fixed).toBe(1);
   });
 
+  it("tags sweep branch after each layer that merges fixes", async () => {
+    let callCount = 0;
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      callCount++;
+      if (opts.task === "security" && callCount === 1) {
+        return makeScanResult([makeCluster("vuln1")]);
+      }
+      return makeScanResult([]);
+    });
+
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-vuln1"]));
+
+    await runSweep({ repoPath: "/repo", auto: true, maxRounds: 1 });
+
+    // Should tag after layer 1 (which had fixes)
+    expect(mockExeca).toHaveBeenCalledWith(
+      "git",
+      ["tag", "kaicho/sweep-abc12345/r1-layer-1", "HEAD"],
+      expect.objectContaining({ cwd: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345" }),
+    );
+
+    // Should NOT tag layers with no fixes (e.g., layer 2)
+    expect(mockExeca).not.toHaveBeenCalledWith(
+      "git",
+      ["tag", "kaicho/sweep-abc12345/r1-layer-2", "HEAD"],
+      expect.anything(),
+    );
+  });
+
   it("detects regressions and flags them without reverting", async () => {
     let securityScanCount = 0;
     mockRunScan.mockImplementation(async (opts: { task: string }) => {

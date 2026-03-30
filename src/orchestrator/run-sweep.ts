@@ -262,6 +262,15 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
           layerResults.push(result);
           options.onLayerComplete?.(round, result);
 
+          // Tag the sweep branch after each layer that merged fixes
+          if (result.keptBranches.length > 0) {
+            const tag = `${sweepBranch}/r${round}-layer-${layer.layer}`;
+            await execa("git", ["tag", tag, "HEAD"], {
+              cwd: sweepWorktreePath,
+              reject: false,
+            });
+          }
+
           // Track regressions for final report
           for (const reg of result.regressions) {
             allRegressions.push({
