@@ -56,7 +56,7 @@ export const sweepCommand = new Command("sweep")
     const onLayerComplete = (_round: number, result: SweepLayerResult): void => {
       if (isTTY) {
         const regMsg = result.regressions.length > 0
-          ? ` | ${result.regressions.length} regressions (reverted)`
+          ? ` | ${result.regressions.length} regressions (flagged)`
           : "";
         const elapsed = (result.durationMs / 1000).toFixed(1);
         process.stderr.write(
@@ -132,7 +132,7 @@ export const sweepCommand = new Command("sweep")
       process.stderr.write(`  Remaining: ${report.remaining.length} (${sevStr})\n`);
       process.stderr.write(`  Report: .kaicho/sweep-report.json\n`);
       if (totalReg > 0) {
-        process.stderr.write(`  Regressions: .kaicho/sweep-regressions.json\n`);
+        process.stderr.write(`  ${color("Regressions flagged — review before merging: .kaicho/sweep-regressions.json", "\x1b[33m")}\n`);
       }
       process.stderr.write(`  Branch: ${report.sweepBranch} (not checked out)\n`);
     } else {

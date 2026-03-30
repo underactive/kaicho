@@ -70,7 +70,7 @@ export interface SweepRoundResult {
 export interface SweepRegression {
   previousLayerTasks: string[];
   newFindingCount: number;
-  revertedBranches: string[];
+  flaggedBranches: string[];
   details: string;
 }
 
@@ -96,7 +96,7 @@ export interface SweepRemaining {
   category: string;
   task: string;
   rationale: string;
-  reason: "not-fixed" | "fix-failed" | "fix-reverted" | "no-changes";
+  reason: "not-fixed" | "fix-failed" | "no-changes";
 }
 
 export interface SweepRegressionReport {
@@ -105,7 +105,7 @@ export interface SweepRegressionReport {
     round: number;
     layer: number;
     previousLayerTasks: string[];
-    revertedBranches: string[];
+    flaggedBranches: string[];
     newCriticalHighCount: number;
     details: string;
   }>;

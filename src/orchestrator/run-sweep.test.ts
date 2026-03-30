@@ -213,7 +213,7 @@ describe("runSweep", () => {
     expect(report.rounds[0]!.layers[0]!.fixed).toBe(1);
   });
 
-  it("detects regressions and reverts", async () => {
+  it("detects regressions and flags them without reverting", async () => {
     let securityScanCount = 0;
     mockRunScan.mockImplementation(async (opts: { task: string }) => {
       if (opts.task === "security") {
@@ -235,14 +235,54 @@ describe("runSweep", () => {
 
     const report = await runSweep({ repoPath: "/repo", auto: true, maxRounds: 1 });
 
-    // QA layer should have detected regression and reverted
+    // QA layer should have detected regression and flagged it
     const qaLayer = report.rounds[0]!.layers[1];
     expect(qaLayer!.regressions.length).toBeGreaterThan(0);
-    expect(mockExeca).toHaveBeenCalledWith(
+    expect(qaLayer!.regressions[0]!.flaggedBranches).toEqual(["kaicho/fix-qa1"]);
+
+    // Fixes are preserved (not reverted)
+    expect(qaLayer!.fixed).toBe(1);
+    expect(qaLayer!.keptBranches).toEqual(["kaicho/fix-qa1"]);
+
+    // git revert was NOT called
+    expect(mockExeca).not.toHaveBeenCalledWith(
       "git",
-      ["revert", "--no-edit", "HEAD~1..HEAD"],
-      expect.objectContaining({ cwd: expect.any(String) }),
+      expect.arrayContaining(["revert"]),
+      expect.anything(),
     );
+  });
+
+  it("checks regressions against all previous layers, not just the immediate one", async () => {
+    let securityScanCount = 0;
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      if (opts.task === "security") {
+        securityScanCount++;
+        // Layer 1 scan: 0 findings
+        // Layer 3 regression check against layer 1: new critical finding
+        if (securityScanCount >= 2) {
+          return makeScanResult([makeCluster("sec-regression", "critical")]);
+        }
+        return makeScanResult([]);
+      }
+      if (opts.task === "qa") {
+        return makeScanResult([]);
+      }
+      if (opts.task === "contracts") {
+        return makeScanResult([makeCluster("contract1", "medium")]);
+      }
+      return makeScanResult([]);
+    });
+
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-contract1"]));
+
+    const report = await runSweep({ repoPath: "/repo", auto: true, maxRounds: 1 });
+
+    // Layer 3 (contracts, state) should detect regression in layer 1 (security)
+    const layer3 = report.rounds[0]!.layers[2];
+    expect(layer3!.regressions.length).toBeGreaterThan(0);
+    expect(layer3!.regressions[0]!.previousLayerTasks).toContain("security");
+    // Fixes still kept
+    expect(layer3!.fixed).toBe(1);
   });
 
   it("stops after max rounds", async () => {

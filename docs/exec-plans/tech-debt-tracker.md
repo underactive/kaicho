@@ -17,16 +17,16 @@ by targeted cleanup tasks on a regular cadence — not accumulated for a
 
 ## Active debt
 
+(none)
+
+## Resolved debt
+
 ### Sweep regression revert is all-or-nothing
 - **Domain:** orchestrator (sweep)
 - **Grade impact:** reliability
 - **Severity:** low
 - **Added:** 2026-03-29
-- **Notes:** When a layer's fixes cause a regression in the previous layer, all fixes from that layer are reverted — even if only one fix was responsible. A binary-search bisection approach (log₂(N) re-scans instead of N) would preserve the non-regressing fixes while still reverting the offender. See `run-sweep.ts:183-185`.
-
-## Resolved debt
-
-(none yet)
+- **Resolved:** 2026-03-30. Replaced all-or-nothing auto-revert with flag-and-continue. Regressions are detected and reported but not auto-reverted — the user reviews `.kaicho/sweep-regressions.json` and decides. Additionally, regression checks now scan all previous layers, not just the immediately preceding one.
 
 ## Process
 

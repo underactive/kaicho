@@ -110,7 +110,7 @@ async function checkRegressions(
     return {
       previousLayerTasks: [...prevLayer.tasks],
       newFindingCount: newCriticalHigh - prevCriticalHigh,
-      revertedBranches: [], // filled by caller
+      flaggedBranches: [], // filled by caller
       details: `Critical/high findings in ${prevLayer.tasks.join(", ")} went from ${prevCriticalHigh} to ${newCriticalHigh}`,
     };
   }
@@ -128,8 +128,7 @@ async function executeLayer(
   sweepWorktreePath: string,
   absRepoPath: string,
   options: SweepOptions,
-  prevLayer: SweepLayer | null,
-  prevCriticalHigh: number,
+  prevLayers: Array<{ layer: SweepLayer; criticalHigh: number }>,
 ): Promise<{ result: SweepLayerResult; criticalHigh: number }> {
   const startMs = Date.now();
   options.onLayerStart?.(round, layer);
@@ -182,22 +181,24 @@ async function executeLayer(
   // Branches already merged inside runBatchedFix
   const mergedBranches = fixResult.keptBranches;
 
-  // 4. Regression check (skip for first layer)
+  // 4. Regression check — flag regressions in all previous layers, don't revert
   const regressions: SweepRegression[] = [];
-  if (prevLayer && mergedBranches.length > 0) {
-    const regression = await checkRegressions(
-      sweepWorktreePath, prevLayer, prevCriticalHigh, options,
-    );
+  if (prevLayers.length > 0 && mergedBranches.length > 0) {
+    for (const prev of prevLayers) {
+      const regression = await checkRegressions(
+        sweepWorktreePath, prev.layer, prev.criticalHigh, options,
+      );
 
-    if (regression) {
-      regression.revertedBranches = [...mergedBranches];
-      await revertMerges(sweepWorktreePath, mergedBranches);
-      regressions.push(regression);
-      log("warn", "Regression detected, reverted layer fixes", {
-        round,
-        layer: layer.layer,
-        regression: regression.details,
-      });
+      if (regression) {
+        regression.flaggedBranches = [...mergedBranches];
+        regressions.push(regression);
+        log("warn", "Regression detected, fixes flagged for review", {
+          round,
+          layer: layer.layer,
+          previousLayer: prev.layer.layer,
+          regression: regression.details,
+        });
+      }
     }
   }
 
@@ -209,10 +210,10 @@ async function executeLayer(
     layer: layer.layer,
     tasks: [...layer.tasks],
     findings: clusters.length,
-    fixed: regressions.length > 0 ? 0 : fixResult.totalKept,
+    fixed: fixResult.totalKept,
     skipped: fixResult.totalSkipped + fixResult.totalDiscarded,
     failed: fixResult.totalFailed,
-    keptBranches: regressions.length > 0 ? [] : mergedBranches,
+    keptBranches: mergedBranches,
     regressions,
     durationMs: Date.now() - startMs,
   };
@@ -247,8 +248,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     for (let round = 1; round <= maxRounds; round++) {
       const roundStartMs = Date.now();
       const layerResults: SweepLayerResult[] = [];
-      let prevLayer: SweepLayer | null = null;
-      let prevCriticalHigh = 0;
+      const prevLayers: Array<{ layer: SweepLayer; criticalHigh: number }> = [];
 
       log("info", "Starting sweep round", { round, maxRounds });
 
@@ -256,7 +256,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
         const layer = SWEEP_LAYERS[i]!;
         try {
           const { result, criticalHigh } = await executeLayer(
-            round, layer, i, sweepWorktreePath, absRepoPath, options, prevLayer, prevCriticalHigh,
+            round, layer, i, sweepWorktreePath, absRepoPath, options, prevLayers,
           );
 
           layerResults.push(result);
@@ -268,14 +268,13 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
               round,
               layer: layer.layer,
               previousLayerTasks: reg.previousLayerTasks,
-              revertedBranches: reg.revertedBranches,
+              flaggedBranches: reg.flaggedBranches,
               newCriticalHighCount: reg.newFindingCount,
               details: reg.details,
             });
           }
 
-          prevLayer = layer;
-          prevCriticalHigh = criticalHigh;
+          prevLayers.push({ layer, criticalHigh });
         } catch (err) {
           log("error", "Layer failed, continuing", { round, layer: layer.layer, error: String(err) });
         }
