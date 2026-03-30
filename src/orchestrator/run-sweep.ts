@@ -165,7 +165,7 @@ async function executeLayer(
   const fixResult: BatchedFixResult = await runBatchedFix({
     repoPath: sweepWorktreePath,
     clusters: toFix,
-    agent: options.agents?.[0],
+    agent: undefined, // let pickAgent use cluster.agents[0] (the finding agent)
     timeoutMs: options.timeoutMs,
     models: options.models,
     scanModels: options.scanModels,
