@@ -21,8 +21,8 @@ export type Category = z.infer<typeof CategoryEnum>;
 export const SuggestionSchema = z.object({
   file: z.string().min(1),
   line: z.number().int().positive().nullable(),
-  category: CategoryEnum,
-  severity: SeverityEnum,
+  category: z.preprocess((v) => (typeof v === "string" ? v.toLowerCase() : v), CategoryEnum),
+  severity: z.preprocess((v) => (typeof v === "string" ? v.toLowerCase() : v), SeverityEnum),
   rationale: z.string().min(1),
   suggestedChange: z.string().nullable(),
 });

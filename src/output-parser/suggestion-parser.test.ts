@@ -62,6 +62,21 @@ describe("parseFromFile", () => {
     expect(result.suggestions[1]?.file).toBe("src/server.ts");
   });
 
+  it("normalizes capitalized category and severity values", () => {
+    const content = JSON.stringify({ suggestions: [
+      { file: "src/a.ts", line: 10, category: "Bug", severity: "Medium", rationale: "test", suggestedChange: null },
+      { file: "src/b.ts", line: 20, category: "Security", severity: "High", rationale: "test", suggestedChange: null },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(2);
+    expect(result.rejected).toBe(0);
+    expect(result.suggestions[0]!.category).toBe("bug");
+    expect(result.suggestions[0]!.severity).toBe("medium");
+    expect(result.suggestions[1]!.category).toBe("security");
+    expect(result.suggestions[1]!.severity).toBe("high");
+  });
+
   it("handles empty string", () => {
     const result = parseFromFile("");
     expect(result.suggestions).toHaveLength(0);
