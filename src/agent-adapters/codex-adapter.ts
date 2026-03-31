@@ -4,8 +4,7 @@ import * as os from "node:os";
 import { execa } from "execa";
 import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
 import { DEFAULT_TIMEOUT_MS } from "../config/index.js";
-import { parseFromFile, parseFromJsonl } from "../output-parser/index.js";
-import { SUGGESTIONS_JSON_SCHEMA } from "../prompts/index.js";
+import { parseFromText, parseFromJsonl } from "../output-parser/index.js";
 import { log } from "../logger/index.js";
 
 async function isGitRepo(dirPath: string): Promise<boolean> {
@@ -43,9 +42,8 @@ export class CodexAdapter implements AgentAdapter {
     const startMs = Date.now();
     const absRepoPath = path.resolve(repoPath);
 
-    // Create temp files for schema input and output capture
+    // Create temp dir for output capture
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "kaicho-"));
-    const schemaPath = path.join(tmpDir, "schema.json");
     const outputPath = path.join(tmpDir, "output.json");
 
     try {
@@ -56,17 +54,11 @@ export class CodexAdapter implements AgentAdapter {
       }
 
       if (mode === "scan") {
-        await fs.writeFile(
-          schemaPath,
-          JSON.stringify(SUGGESTIONS_JSON_SCHEMA),
-          "utf-8",
-        );
         args.push(
           "--full-auto",
           "-s", "read-only",
           "--json",
           "-C", absRepoPath,
-          "--output-schema", schemaPath,
           "-o", outputPath,
         );
       } else if (mode === "review") {
@@ -165,12 +157,12 @@ export class CodexAdapter implements AgentAdapter {
         };
       }
 
-      // Primary: read from -o output file
+      // Primary: read from -o output file (freeform text, parsed post-hoc)
       let parseResult;
       try {
         const outputContent = await fs.readFile(outputPath, "utf-8");
         if (outputContent.trim()) {
-          parseResult = parseFromFile(outputContent);
+          parseResult = parseFromText(outputContent);
         }
       } catch {
         // -o file may not exist if agent produced no output

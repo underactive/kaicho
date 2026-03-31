@@ -180,7 +180,7 @@ describe("CodexAdapter", () => {
       expect(capturedArgs).toContain("-s");
       expect(capturedArgs).toContain("read-only");
       expect(capturedArgs).toContain("--json");
-      expect(capturedArgs).toContain("--output-schema");
+      expect(capturedArgs).not.toContain("--output-schema");
       expect(capturedArgs).toContain("-o");
       // Prompt is the last argument, not interpolated
       expect(capturedArgs[capturedArgs.length - 1]).toBe("scan for issues");

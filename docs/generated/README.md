@@ -27,9 +27,8 @@ SuggestionCluster (grouped by dedup engine)
 
 ## Note on the agent output schema
 
-The `SUGGESTIONS_JSON_SCHEMA` in `src/prompts/shared.ts` is an OpenAI-strict
-variant of `suggestion.schema.json` with `additionalProperties: false` at
-every level and all fields in `required`. It is used by Codex (`--output-schema`)
-and Claude (`--json-schema`) for server-side structured output enforcement.
-Cursor and Gemini receive the same structure in the prompt text but without
-server-side enforcement.
+All agents use freeform text output — no server-side structured output
+enforcement. The `suggestion.schema.json` documents the expected output shape.
+Agents receive the expected field names and format in the prompt text via
+`OUTPUT_INSTRUCTION`. The output parser normalizes minor LLM drift (field
+name aliases, case differences) before Zod validation.

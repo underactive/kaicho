@@ -188,6 +188,137 @@ const VALID_SUGGESTION = {
   suggestedChange: "Use parameterized queries",
 };
 
+describe("field name normalization", () => {
+  it("normalizes aliased field names to canonical names", () => {
+    const content = JSON.stringify({ suggestions: [
+      {
+        fileName: "app.ts",
+        lineNumber: 10,
+        type: "security",
+        level: "high",
+        description: "SQL injection risk",
+        suggested_change: "Use parameterized queries",
+      },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.rejected).toBe(0);
+    expect(result.suggestions[0]).toMatchObject({
+      file: "app.ts",
+      line: 10,
+      category: "security",
+      severity: "high",
+      rationale: "SQL injection risk",
+      suggestedChange: "Use parameterized queries",
+    });
+  });
+
+  it("canonical field wins over alias when both are present", () => {
+    const content = JSON.stringify({ suggestions: [
+      {
+        file: "correct.ts",
+        fileName: "wrong.ts",
+        line: 10,
+        category: "security",
+        severity: "high",
+        rationale: "real rationale",
+        description: "alias rationale",
+        suggestedChange: null,
+      },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]!.file).toBe("correct.ts");
+    expect(result.suggestions[0]!.rationale).toBe("real rationale");
+  });
+
+  it("coerces line from string to number", () => {
+    const content = JSON.stringify({ suggestions: [
+      { file: "a.ts", line: "42", category: "bug", severity: "low", rationale: "test", suggestedChange: null },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]!.line).toBe(42);
+  });
+
+  it("coerces line from null-string to null", () => {
+    const content = JSON.stringify({ suggestions: [
+      { file: "a.ts", line: "null", category: "bug", severity: "low", rationale: "test", suggestedChange: null },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]!.line).toBeNull();
+  });
+
+  it("coerces empty line string to null", () => {
+    const content = JSON.stringify({ suggestions: [
+      { file: "a.ts", line: "", category: "bug", severity: "low", rationale: "test", suggestedChange: null },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]!.line).toBeNull();
+  });
+
+  it("handles mixed canonical and aliased fields", () => {
+    const content = JSON.stringify({ suggestions: [
+      {
+        file: "app.ts",
+        lineNumber: 5,
+        category: "performance",
+        priority: "medium",
+        rationale: "N+1 query",
+        fix: "Use batch loading",
+      },
+    ]});
+    const result = parseFromFile(content);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]).toMatchObject({
+      file: "app.ts",
+      line: 5,
+      category: "performance",
+      severity: "medium",
+      rationale: "N+1 query",
+      suggestedChange: "Use batch loading",
+    });
+  });
+});
+
+describe("wrapper key fallback", () => {
+  it("extracts from { findings: [...] }", () => {
+    const content = JSON.stringify({ findings: [VALID_SUGGESTION] });
+    const result = parseFromFile(content);
+    expect(result.suggestions).toHaveLength(1);
+  });
+
+  it("extracts from { results: [...] }", () => {
+    const content = JSON.stringify({ results: [VALID_SUGGESTION] });
+    const result = parseFromFile(content);
+    expect(result.suggestions).toHaveLength(1);
+  });
+
+  it("extracts from { issues: [...] }", () => {
+    const content = JSON.stringify({ issues: [VALID_SUGGESTION] });
+    const result = parseFromFile(content);
+    expect(result.suggestions).toHaveLength(1);
+  });
+
+  it("prefers suggestions over other keys", () => {
+    const content = JSON.stringify({
+      suggestions: [VALID_SUGGESTION],
+      findings: [{ ...VALID_SUGGESTION, file: "other.ts" }],
+    });
+    const result = parseFromFile(content);
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]!.file).toBe("app.ts");
+  });
+});
+
 describe("parseFromText", () => {
   it("parses pure JSON text", () => {
     const text = JSON.stringify({ suggestions: [VALID_SUGGESTION] });

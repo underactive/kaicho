@@ -8,8 +8,48 @@ export interface ParseResult {
 }
 
 /**
+ * Map common LLM field-name variants to canonical Suggestion field names.
+ * Canonical key always wins — aliases only fill in missing fields.
+ */
+const FIELD_ALIASES: Record<string, string[]> = {
+  file: ["fileName", "filepath", "filePath", "path", "filename"],
+  line: ["lineNumber", "line_number", "lineNo"],
+  category: ["type", "kind"],
+  severity: ["level", "priority"],
+  rationale: ["description", "reason", "message", "explanation"],
+  suggestedChange: ["suggested_change", "fix", "recommendation", "suggestion", "suggestedFix", "suggested_fix"],
+};
+
+function normalizeSuggestionFields(obj: Record<string, unknown>): Record<string, unknown> {
+  for (const [canonical, aliases] of Object.entries(FIELD_ALIASES)) {
+    if (canonical in obj) continue;
+    for (const alias of aliases) {
+      if (alias in obj) {
+        obj[canonical] = obj[alias];
+        delete obj[alias];
+        break;
+      }
+    }
+  }
+
+  // Coerce line from string to number
+  if (typeof obj["line"] === "string") {
+    const trimmed = obj["line"].trim();
+    if (trimmed === "" || trimmed === "null") {
+      obj["line"] = null;
+    } else {
+      const num = Number(trimmed);
+      if (Number.isFinite(num)) obj["line"] = num;
+    }
+  }
+
+  return obj;
+}
+
+/**
  * Validate an array of raw suggestion objects individually.
- * Keeps valid items, logs and counts rejected ones.
+ * Normalizes field names before validation so minor LLM drift
+ * (e.g., "fileName" instead of "file") is corrected, not rejected.
  */
 function validateSuggestions(raw: unknown[]): ParseResult {
   const suggestions: Suggestion[] = [];
@@ -17,7 +57,10 @@ function validateSuggestions(raw: unknown[]): ParseResult {
   let rejected = 0;
 
   for (const item of raw) {
-    const result = SuggestionSchema.safeParse(item);
+    const normalized = typeof item === "object" && item !== null
+      ? normalizeSuggestionFields(item as Record<string, unknown>)
+      : item;
+    const result = SuggestionSchema.safeParse(normalized);
     if (result.success) {
       suggestions.push(result.data);
     } else {
@@ -104,7 +147,7 @@ export function parseFromJsonl(stdout: string): ParseResult {
 
 /**
  * Parse suggestions from freeform text that may contain JSON.
- * Used for agents without schema enforcement (Cursor, Gemini).
+ * Used by all agent adapters (Claude, Codex, Cursor, Gemini).
  * Tries: direct JSON.parse, markdown code fences, brace/bracket extraction.
  */
 export function parseFromText(text: string): ParseResult {
@@ -207,22 +250,23 @@ function extractOutermostJson(text: string): string | null {
 
 /**
  * Extract a suggestions array from various response shapes:
- * - `{ suggestions: [...] }`
  * - `[...]` (bare array)
+ * - `{ suggestions: [...] }` (canonical wrapper)
+ * - `{ findings|results|issues|items: [...] }` (LLM drift fallbacks)
  */
+const SUGGESTIONS_KEYS = ["suggestions", "findings", "results", "issues", "items"];
+
 function extractSuggestionsArray(parsed: unknown): unknown[] | null {
   if (Array.isArray(parsed)) {
     return parsed;
   }
 
-  if (
-    typeof parsed === "object" &&
-    parsed !== null &&
-    "suggestions" in parsed
-  ) {
+  if (typeof parsed === "object" && parsed !== null) {
     const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj["suggestions"])) {
-      return obj["suggestions"];
+    for (const key of SUGGESTIONS_KEYS) {
+      if (Array.isArray(obj[key])) {
+        return obj[key];
+      }
     }
   }
 

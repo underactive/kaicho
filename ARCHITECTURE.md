@@ -36,8 +36,7 @@ deduplicates across agents, and can dispatch agents to apply fixes.
            ▼
 ┌─────────────────────────────────────────────────────────┐
 │                  Output Parser                          │
-│  parseFromFile (schema-enforced: Claude, Codex)         │
-│  parseFromText (freeform: Cursor, Gemini)               │
+│  parseFromText (freeform: Claude, Codex, Cursor, Gemini)│
 │  parseFromJsonl (Codex JSONL fallback)                  │
 └──────────────────────┬──────────────────────────────────┘
                        │

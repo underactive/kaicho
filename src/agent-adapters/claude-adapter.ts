@@ -1,8 +1,7 @@
 import { execa } from "execa";
 import type { AgentAdapter, AgentConfig, AgentMode, RunResult } from "../types/index.js";
 import { DEFAULT_TIMEOUT_MS } from "../config/index.js";
-import { parseFromFile } from "../output-parser/index.js";
-import { SUGGESTIONS_JSON_SCHEMA } from "../prompts/index.js";
+import { parseFromText } from "../output-parser/index.js";
 import { log } from "../logger/index.js";
 
 export class ClaudeAdapter implements AgentAdapter {
@@ -42,7 +41,6 @@ export class ClaudeAdapter implements AgentAdapter {
       }
 
       if (mode === "scan") {
-        args.push("--json-schema", JSON.stringify(SUGGESTIONS_JSON_SCHEMA));
         args.push("--permission-mode", "plan");
       } else if (mode === "review") {
         args.push("--permission-mode", "plan"); // read-only, no schema
@@ -144,40 +142,11 @@ export class ClaudeAdapter implements AgentAdapter {
       };
     }
 
-    // structured_output is an already-parsed object when --json-schema is used
+    // Defensive: if structured_output exists (e.g. leftover --json-schema),
+    // stringify it and parse as text
     const structured = wrapper["structured_output"];
     if (structured && typeof structured === "object") {
-      const content = JSON.stringify(structured);
-      const parseResult = parseFromFile(content);
-
-      if (parseResult.suggestions.length === 0 && parseResult.errors.length > 0) {
-        return {
-          agent: this.config.name,
-          status: "parse-error",
-          suggestions: [],
-          rawOutput: stdout,
-          rawError: stderr,
-          durationMs,
-          startedAt,
-          error: parseResult.errors.join("; "),
-        };
-      }
-
-      return {
-        agent: this.config.name,
-        status: "success",
-        suggestions: parseResult.suggestions,
-        rawOutput: stdout,
-        rawError: stderr,
-        durationMs,
-        startedAt,
-      };
-    }
-
-    // Fallback: try result field (text content without schema enforcement)
-    const resultText = wrapper["result"];
-    if (typeof resultText === "string" && resultText.trim()) {
-      const parseResult = parseFromFile(resultText);
+      const parseResult = parseFromText(JSON.stringify(structured));
       if (parseResult.suggestions.length > 0) {
         return {
           agent: this.config.name,
@@ -191,15 +160,44 @@ export class ClaudeAdapter implements AgentAdapter {
       }
     }
 
+    // Primary: freeform text in the result field
+    const resultText = wrapper["result"];
+    if (typeof resultText !== "string" || !resultText.trim()) {
+      return {
+        agent: this.config.name,
+        status: "parse-error",
+        suggestions: [],
+        rawOutput: stdout,
+        rawError: stderr,
+        durationMs,
+        startedAt,
+        error: "No result text in Claude response",
+      };
+    }
+
+    const parseResult = parseFromText(resultText);
+
+    if (parseResult.suggestions.length === 0 && parseResult.errors.length > 0) {
+      return {
+        agent: this.config.name,
+        status: "parse-error",
+        suggestions: [],
+        rawOutput: stdout,
+        rawError: stderr,
+        durationMs,
+        startedAt,
+        error: parseResult.errors.join("; "),
+      };
+    }
+
     return {
       agent: this.config.name,
-      status: "parse-error",
-      suggestions: [],
+      status: "success",
+      suggestions: parseResult.suggestions,
       rawOutput: stdout,
       rawError: stderr,
       durationMs,
       startedAt,
-      error: "No structured_output or parseable result in Claude response",
     };
   }
 }
