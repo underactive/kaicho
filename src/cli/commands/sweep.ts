@@ -6,6 +6,7 @@ import { runSweep } from "../../orchestrator/run-sweep.js";
 import { loadConfig, DEFAULT_TIMEOUT_MS } from "../../config/index.js";
 import { DEFAULT_MAX_ROUNDS, type SweepLayer, type SweepLayerResult, type SweepRoundResult } from "../../orchestrator/sweep-types.js";
 import type { ParallelFixProgress } from "../../orchestrator/run-parallel-fix.js";
+import type { ScanProgress } from "../../orchestrator/run-scan.js";
 
 const NO_COLOR = "NO_COLOR" in process.env;
 
@@ -104,6 +105,33 @@ export const sweepCommand = new Command("sweep")
       }
     };
 
+    const formatElapsed = (ms: number): string => {
+      const s = Math.floor(ms / 1000);
+      return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
+    };
+
+    const onScanProgress = (p: ScanProgress): void => {
+      const task = p.task ? ` [${p.task}]` : "";
+      if (isTTY) {
+        if (p.status === "started") {
+          process.stderr.write(`    ${color(p.agent, "\x1b[36m")}${task} scanning...\n`);
+        } else if (p.status === "running") {
+          process.stderr.write(`    ${color(p.agent, "\x1b[90m")}${task} still running (${formatElapsed(p.durationMs ?? 0)})\n`);
+        } else if (p.status === "done") {
+          const elapsed = formatElapsed(p.durationMs ?? 0);
+          if (p.error) {
+            process.stderr.write(`    ${color(p.agent, "\x1b[31m")}${task} ${color("error", "\x1b[31m")} (${elapsed}) — ${p.error}\n`);
+          } else {
+            process.stderr.write(`    ${color(p.agent, "\x1b[32m")}${task} ${color("done", "\x1b[32m")} — ${p.suggestions} suggestions (${elapsed})\n`);
+          }
+        } else if (p.status === "skipped") {
+          process.stderr.write(`    ${color(p.agent, "\x1b[33m")}${task} ${color("skipped", "\x1b[33m")} — not available\n`);
+        }
+      } else {
+        process.stderr.write(JSON.stringify({ type: "sweep.scan-progress", ...p }) + "\n");
+      }
+    };
+
     if (isTTY) {
       process.stderr.write(`\n═══ Sweep starting (max ${maxRounds} rounds) ═══\n`);
     }
@@ -122,6 +150,7 @@ export const sweepCommand = new Command("sweep")
       reviewer: opts.reviewer as string | undefined ?? config.reviewer,
       verbose: opts.verbose === true,
       finalScan: opts.finalScan === true,
+      onScanProgress,
       onLayerStart,
       onLayerComplete,
       onRoundComplete,

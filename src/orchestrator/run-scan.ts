@@ -13,7 +13,8 @@ import { resolveAdapter, ALL_AGENT_NAMES } from "./resolve-adapter.js";
 
 export interface ScanProgress {
   agent: string;
-  status: "started" | "done" | "skipped";
+  status: "started" | "running" | "done" | "skipped";
+  task?: string;
   durationMs?: number;
   suggestions?: number;
   error?: string;
@@ -86,7 +87,17 @@ async function runSingleAgent(
   log("info", "Running scan", { agent, repoPath: absRepoPath });
   onProgress?.({ agent, status: "started" });
 
+  // Heartbeat every 30s so UIs know the agent is still alive
+  const scanStart = Date.now();
+  const heartbeat = onProgress
+    ? setInterval(() => {
+        onProgress({ agent, status: "running", durationMs: Date.now() - scanStart });
+      }, 30_000)
+    : undefined;
+
   const result = await adapter.run(absRepoPath, prompt);
+
+  if (heartbeat) clearInterval(heartbeat);
 
   onProgress?.({
     agent,
