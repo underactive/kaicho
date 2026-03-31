@@ -311,20 +311,23 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       // Push round data immediately so it survives exit-scan failures
       rounds.push(roundResult);
 
-      // Check exit condition: re-scan security + qa for critical/high
-      try {
-        const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
-        const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
-        const remainingCriticalHigh =
-          countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
-        roundResult.criticalHighRemaining = remainingCriticalHigh;
-      } catch (err) {
-        log("warn", "Exit condition scan failed", { error: String(err) });
+      // Check exit condition: re-scan security + qa for critical/high.
+      // Skip on the final round — no point checking when there's no next round to skip.
+      if (round < maxRounds) {
+        try {
+          const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
+          const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
+          const remainingCriticalHigh =
+            countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
+          roundResult.criticalHighRemaining = remainingCriticalHigh;
+        } catch (err) {
+          log("warn", "Exit condition scan failed", { error: String(err) });
+        }
       }
 
       options.onRoundComplete?.(roundResult);
 
-      if (roundResult.criticalHighRemaining === 0) {
+      if (round < maxRounds && roundResult.criticalHighRemaining === 0) {
         exitReason = "zero-critical-high";
         log("info", "Sweep exit: zero critical/high in security + qa", { round });
         break;
