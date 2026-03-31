@@ -108,10 +108,11 @@ Options:
   --validate              Cross-agent validation on fixes
   --reviewer <agent>      Reviewer agent for validation
   --concurrency <n>       Parallel fix concurrency (default: 3)
+  --final-scan            Run a full re-scan after all rounds to report remaining findings
   --verbose               Show detailed output
 ```
 
-Exits when zero critical/high findings remain in security + qa, or after max rounds. Writes `.kaicho/sweep-report.json` and `.kaicho/sweep-regressions.json`.
+Exits when zero critical/high findings remain in security + qa, or after max rounds. Writes `.kaicho/sweep-report.json` and `.kaicho/sweep-regressions.json`. All output is automatically logged to `.kaicho/sweep-<timestamp>.log`.
 
 ### `kaicho report`
 

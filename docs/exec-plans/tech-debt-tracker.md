@@ -17,7 +17,19 @@ by targeted cleanup tasks on a regular cadence — not accumulated for a
 
 ## Active debt
 
-(none)
+### Two-pass sweep strategy
+- **Domain:** orchestrator (sweep)
+- **Grade impact:** performance, reliability
+- **Severity:** low
+- **Added:** 2026-03-31
+- **Notes:** Current sweep runs layers high-to-low priority (security first). This means early security fixes get churned by later lower-priority passes. A two-pass strategy would: Pass 1 — all layers low-to-high, no regression checks, no validation (speed run to clean up the codebase). Pass 2 — security + QA only, with full regression checks + validation (thorough pass on a clean base). Estimated ~100-150 lines in `run-sweep.ts` + CLI flag (`--strategy=two-pass` or `--two-pass`). Wait for second sweep results to confirm the regression pattern before implementing.
+
+### Gemini suggestion volume in non-critical layers
+- **Domain:** orchestrator (scan)
+- **Grade impact:** performance
+- **Severity:** low
+- **Added:** 2026-03-31
+- **Notes:** Gemini produced 86 suggestions for docs and 43 for testing in single scan passes on a small firmware project. Likely low-signal noise inflating remaining-findings counts. Consider per-agent suggestion caps or severity-weighted filtering for non-critical layers. Wait for second sweep data to confirm.
 
 ## Resolved debt
 
