@@ -1,4 +1,4 @@
-export { SUGGESTIONS_JSON_SCHEMA } from "./shared.js";
+export { SUGGESTIONS_JSON_SCHEMA, ANALYSIS_METHODOLOGY, confidenceGate } from "./shared.js";
 export { SCAN_TASKS, type ScanTask } from "./scan-tasks.js";
 export { buildSecurityScanPrompt } from "./security-scan.js";
 export { buildQaScanPrompt } from "./qa-scan.js";

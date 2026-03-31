@@ -1,8 +1,18 @@
-import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, ANALYSIS_METHODOLOGY, confidenceGate, OUTPUT_INSTRUCTION } from "./shared.js";
+
+const EXCLUSIONS = `
+DO NOT FLAG the following — these are common false positives in QA scans:
+- Generated code, vendored dependencies, lock files, or build output
+- Intentional framework patterns (Redux reducers mutating via Immer, React useEffect dependency arrays managed by lint rules, Go-style error returns)
+- Test assertion helpers or test utilities that intentionally use loose patterns (any casts, partial mocks)
+- Feature flags with a single active path — the inactive path is not dead code
+- Simplified error handling in one-shot CLI scripts or build tools
+- Type casts in test files used to create test fixtures or stubs
+`;
 
 export function buildQaScanPrompt(fileManifest?: string, repoContext?: string): string {
   return `You are a senior quality assurance engineer performing a quality audit of a codebase. Analyze the code in this repository for quality issues.${buildPromptPrelude(fileManifest, repoContext)}
-
+${ANALYSIS_METHODOLOGY}
 Focus on (skip items that aren't relevant to the language):
 - Functional correctness & logic errors — broken workflows, logic that doesn't match spec, off-by-one errors, incorrect boolean/conditional logic, missing error and loading states, silent failures that produce wrong results instead of surfacing errors
 - Edge cases — empty/null/undefined inputs, zero-length collections, boundary values (min/max/overflow), single-element vs many-element behavior, unexpected type coercions, unicode and locale-sensitive string handling
@@ -17,5 +27,7 @@ Focus on (skip items that aren't relevant to the language):
 - Code duplication & maintainability — repeated logic that should be extracted, inconsistent implementations of the same behavior, copy-paste drift between duplicated blocks
 - API misuse & deprecated patterns — calling APIs with wrong argument order or types, using deprecated methods with known replacements, ignoring return values that signal errors, misunderstanding library contracts
 - Missing input validation at boundaries — unvalidated data entering the system from external APIs, user input, file parsing, or inter-service calls; assumptions about shape or format not enforced at the entry point
+${confidenceGate()}
+${EXCLUSIONS}
 ${OUTPUT_INSTRUCTION}`;
 }

@@ -67,6 +67,17 @@ export function buildPromptPrelude(fileManifest?: string, repoContext?: string):
   return prelude;
 }
 
+export const ANALYSIS_METHODOLOGY = `
+ANALYSIS METHODOLOGY — Follow these phases in order:
+1. Understand context: Before flagging anything, study the repository's existing patterns, frameworks, conventions, and architectural decisions. Use the repo context above and examine the code structure.
+2. Compare against established patterns: Evaluate code against the project's OWN conventions and industry standards for its stack — not your personal preferences or theoretical ideals.
+3. Assess real-world impact: For each potential finding, ask "Would a senior developer on this project consider this a real problem worth fixing?" Discard anything speculative, cosmetic, or with negligible practical impact.
+`;
+
+export function confidenceGate(threshold = 75): string {
+  return `\nCONFIDENCE GATE: Only report findings where you are at least ${threshold}% confident the issue is real, impactful, and not an intentional design choice. When in doubt, omit the finding.\n`;
+}
+
 export const OUTPUT_INSTRUCTION = `
 For each finding, provide:
 - file: the relative file path from the repository root

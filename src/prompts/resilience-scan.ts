@@ -1,8 +1,18 @@
-import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, ANALYSIS_METHODOLOGY, confidenceGate, OUTPUT_INSTRUCTION } from "./shared.js";
+
+const EXCLUSIONS = `
+DO NOT FLAG the following — these are common false positives in resilience scans:
+- Local-only tools and CLI utilities that have no network dependencies
+- Intentional fail-fast behavior in CLIs and batch jobs (crash on bad input rather than degrade)
+- Development and test environments (missing health checks or rate limiting in dev is expected)
+- Single-dependency architectures where there is no meaningful fallback (e.g., the primary database)
+- Missing circuit breakers on dependencies with built-in retry/backoff at the client library level
+- Graceful shutdown concerns in serverless functions where the platform manages lifecycle
+`;
 
 export function buildResilienceScanPrompt(fileManifest?: string, repoContext?: string): string {
   return `You are a reliability engineer reviewing a codebase for fault tolerance and graceful degradation issues — problems that cause cascading failures, unavailability, or data loss when external dependencies misbehave or load spikes.${buildPromptPrelude(fileManifest, repoContext)}
-
+${ANALYSIS_METHODOLOGY}
 Focus on (skip items that aren't relevant to the language or deployment model):
 - Missing timeouts — HTTP/RPC/database calls without explicit timeout configuration, file or network operations that can hang indefinitely, external service calls that block callers without a deadline
 - Missing circuit breakers & fallbacks — calls to external services with no fallback path when the service is down, no circuit breaker pattern to stop retrying a known-failing dependency, missing degraded-mode behavior (e.g., serve stale data, skip non-critical features)
@@ -22,6 +32,7 @@ Use existing categories for findings:
 - "bug" for missing resilience patterns that cause failures under real conditions
 - "security" for missing rate limiting and unbounded input that enables DoS
 - "performance" for unbounded retries and missing backoff that amplifies load
-
+${confidenceGate()}
+${EXCLUSIONS}
 ${OUTPUT_INSTRUCTION}`;
 }

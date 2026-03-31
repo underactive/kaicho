@@ -11,7 +11,8 @@ import { buildDxScanPrompt } from "./dx-scan.js";
 import { buildPerformanceScanPrompt } from "./performance-scan.js";
 import { buildResilienceScanPrompt } from "./resilience-scan.js";
 import { buildLoggingScanPrompt } from "./logging-scan.js";
-import { OUTPUT_INSTRUCTION } from "./shared.js";
+import { OUTPUT_INSTRUCTION, ANALYSIS_METHODOLOGY } from "./shared.js";
+import { buildSecurityScanPrompt as securityBuilder } from "./security-scan.js";
 
 type PromptBuilder = (fileManifest?: string, repoContext?: string) => string;
 
@@ -85,5 +86,58 @@ for (const { task, builder, anchor } of TASK_TESTS) {
       const prompt = builder();
       expect(prompt).not.toContain("SCOPE:");
     });
+
+    it("contains ANALYSIS_METHODOLOGY", () => {
+      const prompt = builder();
+      expect(prompt).toContain("ANALYSIS METHODOLOGY");
+      expect(prompt).toContain("Understand context");
+      expect(prompt).toContain("Compare against established patterns");
+      expect(prompt).toContain("Assess real-world impact");
+    });
+
+    it("contains confidence gate", () => {
+      const prompt = builder();
+      expect(prompt).toContain("CONFIDENCE GATE");
+    });
+
+    it("contains false-positive exclusions", () => {
+      const prompt = builder();
+      expect(prompt).toContain("DO NOT FLAG");
+    });
+
+    it("methodology appears before focus areas", () => {
+      const prompt = builder();
+      const methodIdx = prompt.indexOf("ANALYSIS METHODOLOGY");
+      const focusIdx = prompt.indexOf("Focus on");
+      expect(methodIdx).toBeGreaterThan(-1);
+      expect(focusIdx).toBeGreaterThan(-1);
+      expect(methodIdx).toBeLessThan(focusIdx);
+    });
+
+    it("exclusions appear after focus areas and before output instruction", () => {
+      const prompt = builder();
+      const focusIdx = prompt.indexOf("Focus on");
+      const excludeIdx = prompt.indexOf("DO NOT FLAG");
+      const outputIdx = prompt.indexOf("For each finding");
+      expect(excludeIdx).toBeGreaterThan(focusIdx);
+      expect(excludeIdx).toBeLessThan(outputIdx);
+    });
   });
 }
+
+describe("security scan confidence threshold", () => {
+  it("uses 80% confidence threshold", () => {
+    const prompt = securityBuilder();
+    expect(prompt).toContain("80%");
+  });
+});
+
+describe("non-security scans confidence threshold", () => {
+  for (const { task, builder } of TASK_TESTS) {
+    if (task === "security") continue;
+    it(`${task} uses 75% default confidence threshold`, () => {
+      const prompt = builder();
+      expect(prompt).toContain("75%");
+    });
+  }
+});

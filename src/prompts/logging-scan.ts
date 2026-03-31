@@ -1,8 +1,18 @@
-import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, ANALYSIS_METHODOLOGY, confidenceGate, OUTPUT_INSTRUCTION } from "./shared.js";
+
+const EXCLUSIONS = `
+DO NOT FLAG the following — these are common false positives in logging scans:
+- CLI tools that use stdout/stderr as their interface — console.log IS the output mechanism, not a logging gap
+- Development-only debug logging behind NODE_ENV, DEBUG, or similar feature flags
+- Test code using console.log for test output or debugging
+- Structured logging libraries that already handle level and context internally (winston, pino, bunyan, slog) — do not re-flag what the library provides
+- Log messages in catch blocks that include the error object — this IS including context
+- Request IDs, timestamps, HTTP methods, and status codes in logs — these are not sensitive data
+`;
 
 export function buildLoggingScanPrompt(fileManifest?: string, repoContext?: string): string {
   return `You are a logging and observability auditor reviewing a codebase for issues that affect debugging, monitoring, security audit trails, and data leak risk through log output.${buildPromptPrelude(fileManifest, repoContext)}
-
+${ANALYSIS_METHODOLOGY}
 Focus on (skip items that aren't relevant to the language or logging framework):
 - Sensitive data in logs — PII (names, emails, phone numbers), authentication tokens, passwords, API keys, session IDs, or credit card numbers written to log output; missing redaction in structured log fields; sensitive data in error messages exposed to callers
 - Bare console.log / print — unstructured log statements instead of a leveled logging framework, debug print statements left in production code paths, log output that cannot be parsed by log aggregation tools
@@ -22,6 +32,7 @@ Use existing categories for findings:
 - "security" for sensitive data leaks, log injection, and missing audit trails
 - "maintainability" for unstructured logging, inconsistent levels, and missing context
 - "bug" for swallowed error context that hides real failures
-
+${confidenceGate()}
+${EXCLUSIONS}
 ${OUTPUT_INSTRUCTION}`;
 }

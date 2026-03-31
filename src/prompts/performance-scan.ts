@@ -1,8 +1,18 @@
-import { buildPromptPrelude, OUTPUT_INSTRUCTION } from "./shared.js";
+import { buildPromptPrelude, ANALYSIS_METHODOLOGY, confidenceGate, OUTPUT_INSTRUCTION } from "./shared.js";
+
+const EXCLUSIONS = `
+DO NOT FLAG the following — these are common false positives in performance scans:
+- One-shot scripts, CLI tools, or build-time code where execution speed is irrelevant
+- Application startup/initialization code that runs once per process lifetime
+- Readability-first patterns in non-hot paths (e.g., array spread vs manual loop in code called once)
+- Small fixed-size collections iterated with O(n²) where n is bounded and small (< 100 items)
+- Missing caching for data that changes on every request or has no reuse window
+- Bundle size concerns in server-only code that is never sent to clients
+`;
 
 export function buildPerformanceScanPrompt(fileManifest?: string, repoContext?: string): string {
   return `You are a performance engineer reviewing a codebase for efficiency issues — problems that cause unnecessary latency, memory consumption, or resource waste under real-world workloads.${buildPromptPrelude(fileManifest, repoContext)}
-
+${ANALYSIS_METHODOLOGY}
 Focus on (skip items that aren't relevant to the language or runtime):
 - N+1 queries & redundant I/O — database queries inside loops, repeated network calls that could be batched, sequential awaits that could be parallelized, redundant file reads for data already in memory
 - Algorithmic complexity — O(n²) or worse over collections that grow with input size, linear scans where an index or map lookup would suffice, repeated full-array searches inside loops, sort-then-search where a heap or priority queue fits
@@ -21,6 +31,7 @@ Skip items covered by other scan tasks:
 Use existing categories for findings:
 - "performance" for latency, throughput, memory, and bundle size issues
 - "bug" for performance issues that also cause incorrect behavior (e.g., infinite growth leading to OOM)
-
+${confidenceGate()}
+${EXCLUSIONS}
 ${OUTPUT_INSTRUCTION}`;
 }
