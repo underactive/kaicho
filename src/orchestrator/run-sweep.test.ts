@@ -3,7 +3,8 @@ import { SWEEP_LAYERS, DEFAULT_MAX_ROUNDS, countCriticalHigh } from "./sweep-typ
 
 const {
   mockRunScan, mockRunBatchedFix,
-  mockEnsureClean, mockCreateSweepWorktree, mockRemoveFixWorktree, mockPruneStaleWorktrees, mockExeca,
+  mockEnsureClean, mockCreateSweepWorktree, mockRemoveFixWorktree, mockPruneStaleWorktrees,
+  mockPruneOrphanFixBranches, mockExeca,
   mockLoadFixLog, mockWriteSweepReport, mockWriteSweepRegressions,
 } = vi.hoisted(() => ({
   mockRunScan: vi.fn(),
@@ -12,6 +13,7 @@ const {
   mockCreateSweepWorktree: vi.fn().mockResolvedValue({ worktreePath: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345", branch: "kaicho/sweep-abc12345" }),
   mockRemoveFixWorktree: vi.fn().mockResolvedValue(undefined),
   mockPruneStaleWorktrees: vi.fn().mockResolvedValue(undefined),
+  mockPruneOrphanFixBranches: vi.fn().mockResolvedValue(undefined),
   mockExeca: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "", stderr: "" }),
   mockLoadFixLog: vi.fn().mockResolvedValue([]),
   mockWriteSweepReport: vi.fn().mockResolvedValue("/repo/.kaicho/sweep-report.json"),
@@ -35,6 +37,7 @@ vi.mock("../branch/index.js", () => ({
   createSweepWorktree: mockCreateSweepWorktree,
   removeFixWorktree: mockRemoveFixWorktree,
   pruneStaleWorktrees: mockPruneStaleWorktrees,
+  pruneOrphanFixBranches: mockPruneOrphanFixBranches,
 }));
 
 vi.mock("../fix-log/index.js", () => ({

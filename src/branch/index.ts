@@ -21,4 +21,5 @@ export {
   pruneStaleWorktrees,
   cleanupWorktreeBase,
   getWorktreeBasePath,
+  pruneOrphanFixBranches,
 } from "./worktree.js";

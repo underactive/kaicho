@@ -104,3 +104,47 @@ export async function cleanupWorktreeBase(): Promise<void> {
     // Best-effort
   }
 }
+
+/**
+ * Delete orphaned `kaicho/fix-*` branches that have no associated worktree.
+ *
+ * These accumulate when a merge fails and the deferred retry never runs
+ * (e.g. because the layer crashed). Called at the end of a sweep to avoid
+ * leaving stale branches in the user's repo.
+ */
+export async function pruneOrphanFixBranches(repoPath: string): Promise<void> {
+  // List all kaicho/fix-* branches
+  const { stdout: branchList } = await execa(
+    "git", ["branch", "--list", `${BRANCH_PREFIX}*`, "--format=%(refname:short)"],
+    { cwd: repoPath, reject: false },
+  );
+  if (!branchList.trim()) return;
+
+  const branches = branchList.trim().split("\n").filter(Boolean);
+
+  // List active worktree branches so we don't delete branches with live worktrees
+  const { stdout: wtList } = await execa(
+    "git", ["worktree", "list", "--porcelain"],
+    { cwd: repoPath, reject: false },
+  );
+  const activeBranches = new Set(
+    wtList.split("\n")
+      .filter((l) => l.startsWith("branch "))
+      .map((l) => l.replace("branch refs/heads/", "")),
+  );
+
+  const orphans = branches.filter((b) => !activeBranches.has(b));
+  if (orphans.length === 0) return;
+
+  for (const branch of orphans) {
+    await execa("git", ["branch", "-D", branch], {
+      cwd: repoPath,
+      reject: false,
+    });
+  }
+
+  log("info", "Pruned orphan fix branches", {
+    removed: orphans.length,
+    branches: orphans,
+  });
+}

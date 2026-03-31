@@ -8,6 +8,7 @@ import {
   createSweepWorktree,
   removeFixWorktree,
   pruneStaleWorktrees,
+  pruneOrphanFixBranches,
 } from "../branch/index.js";
 import { loadFixLog } from "../fix-log/index.js";
 import { log } from "../logger/index.js";
@@ -376,6 +377,10 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
   // Clean up worktree but preserve the sweep branch for review
   await removeFixWorktree(absRepoPath, sweepWorktreePath, sweepBranch, false)
     .catch((err) => log("warn", "Failed to remove sweep worktree", { error: String(err) }));
+
+  // Delete orphaned kaicho/fix-* branches left behind by failed merges
+  await pruneOrphanFixBranches(absRepoPath)
+    .catch((err) => log("warn", "Failed to prune orphan fix branches", { error: String(err) }));
 
   return report;
 }
