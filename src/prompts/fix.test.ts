@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
+import { buildFixPrompt, buildMultiFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
 function makeCluster(overrides: Partial<SuggestionCluster> = {}): SuggestionCluster {
@@ -110,6 +110,65 @@ describe("buildRetryFixPrompt", () => {
   it("omits repo context when not provided", () => {
     const prompt = buildRetryFixPrompt(makeCluster(), failedDiff, concern);
     expect(prompt).not.toContain("PROJECT CONTEXT");
+  });
+});
+
+describe("buildMultiFixPrompt", () => {
+  it("lists all issues with numbered headers", () => {
+    const clusters = [
+      makeCluster({ id: "aa11", line: 42 }),
+      makeCluster({ id: "bb22", line: 100, category: "bug", severity: "medium", suggestedChange: null }),
+    ];
+    const prompt = buildMultiFixPrompt(clusters);
+    expect(prompt).toContain("ISSUES TO FIX (2 total)");
+    expect(prompt).toContain("--- Issue 1 of 2 [aa11] ---");
+    expect(prompt).toContain("--- Issue 2 of 2 [bb22] ---");
+  });
+
+  it("includes target file", () => {
+    const prompt = buildMultiFixPrompt([makeCluster()]);
+    expect(prompt).toContain("TARGET FILE: src/api.ts");
+  });
+
+  it("includes rationales from each cluster", () => {
+    const clusters = [
+      makeCluster({ id: "aa11", rationales: [{ agent: "claude", rationale: "buffer overflow" }] }),
+      makeCluster({ id: "bb22", rationales: [{ agent: "gemini", rationale: "null deref" }] }),
+    ];
+    const prompt = buildMultiFixPrompt(clusters);
+    expect(prompt).toContain("claude: buffer overflow");
+    expect(prompt).toContain("gemini: null deref");
+  });
+
+  it("includes suggested change only for clusters that have one", () => {
+    const clusters = [
+      makeCluster({ id: "aa11", suggestedChange: "Use bounds check" }),
+      makeCluster({ id: "bb22", suggestedChange: null }),
+    ];
+    const prompt = buildMultiFixPrompt(clusters);
+    expect(prompt).toContain("Use bounds check");
+    // The second issue block should not have a suggested fix section
+    const secondIssue = prompt.split("--- Issue 2")[1]!;
+    expect(secondIssue).not.toContain("Suggested fix:");
+  });
+
+  it("instructs fixing ALL issues and ensuring compatibility", () => {
+    const prompt = buildMultiFixPrompt([makeCluster(), makeCluster({ id: "bb22" })]);
+    expect(prompt).toContain("ALL 2 issues");
+    expect(prompt).toContain("Fixes may interact");
+  });
+
+  it("includes repo context when provided", () => {
+    const ctx = "PROJECT CONTEXT:\n- Languages: C++";
+    const prompt = buildMultiFixPrompt([makeCluster()], ctx);
+    expect(prompt).toContain("PROJECT CONTEXT");
+    expect(prompt).toContain("C++");
+  });
+
+  it("requests FIX_CONTEXT block", () => {
+    const prompt = buildMultiFixPrompt([makeCluster()]);
+    expect(prompt).toContain("<FIX_CONTEXT>");
+    expect(prompt).toContain("</FIX_CONTEXT>");
   });
 });
 

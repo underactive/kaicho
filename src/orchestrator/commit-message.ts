@@ -86,6 +86,44 @@ function formatAgent(name: string, model?: string): string {
   return resolvedModel ? `${display} (${resolvedModel})` : display;
 }
 
+/**
+ * Build a commit message for a grouped fix (multiple clusters, one file).
+ */
+export function buildGroupCommitMessage(
+  clusters: SuggestionCluster[],
+  agent: string,
+  model?: string,
+  scanModels?: Record<string, string>,
+  reviewer?: CommitMessageReviewer,
+): string {
+  const file = clusters[0]!.file;
+  const ids = clusters.map((c) => c.id).join("+");
+  const categories = [...new Set(clusters.map((c) => c.category))].join(", ");
+
+  const lines: string[] = [
+    `fix(${ids}): fix ${clusters.length} issues in ${file}`,
+    "",
+    `File: ${file}`,
+    `Issues: ${clusters.length} (${categories})`,
+  ];
+
+  for (const cluster of clusters) {
+    const summary = cluster.summary
+      ?? truncate(cluster.rationales[0]?.rationale ?? "fix applied", 60);
+    lines.push(`[${cluster.id}] ${summary} (${cluster.severity})`);
+  }
+
+  const fixer = formatAgent(agent, model);
+  if (reviewer) {
+    const rev = formatAgent(reviewer.name, reviewer.model);
+    lines.push("", `Fixed by ${fixer} and reviewed by ${rev}, applied via Kaichō`);
+  } else {
+    lines.push("", `Fixed by ${fixer}, applied via Kaichō`);
+  }
+
+  return lines.join("\n");
+}
+
 function truncate(text: string, maxLen: number): string {
   const oneLine = text.replace(/\n/g, " ");
   if (oneLine.length <= maxLen) return oneLine;

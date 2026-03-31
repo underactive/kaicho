@@ -74,6 +74,69 @@ Tradeoffs: [any limitations, downsides, or scope boundaries of this fix]
 }
 
 /**
+ * Build a prompt that instructs an agent to fix multiple issues in the same
+ * file in a single pass. All clusters must share the same `file` property.
+ *
+ * Used by the serial-phase grouping optimization to avoid one worktree/agent
+ * session per finding when a file has many findings.
+ */
+export function buildMultiFixPrompt(
+  clusters: SuggestionCluster[],
+  repoContext?: string,
+): string {
+  const file = clusters[0]!.file;
+  const n = clusters.length;
+  const contextBlock = repoContext ? `\n${repoContext}\n` : "";
+
+  const issueBlocks = clusters.map((cluster, i) => {
+    const location = cluster.line
+      ? `${cluster.file}:${cluster.line}`
+      : cluster.file;
+
+    const rationales = cluster.rationales
+      .map((r) => `- ${r.agent}: ${r.rationale}`)
+      .join("\n");
+
+    const change = cluster.suggestedChange
+      ? `\nSuggested fix:\n${cluster.suggestedChange}`
+      : "";
+
+    return `--- Issue ${i + 1} of ${n} [${cluster.id}] ---
+LOCATION: ${location}
+SEVERITY: ${cluster.severity} | CATEGORY: ${cluster.category}
+FOUND BY: ${cluster.agents.join(", ")}
+
+RATIONALE:
+${rationales}${change}`;
+  }).join("\n\n");
+
+  return `You are a senior developer fixing multiple issues in the same file found during a code review.
+${contextBlock}
+TARGET FILE: ${file}
+
+ISSUES TO FIX (${n} total):
+
+${issueBlocks}
+
+INSTRUCTIONS:
+1. Read the file at ${file}
+2. Understand ALL ${n} issues described above
+3. Apply minimal, targeted fixes for EACH issue
+4. Fixes may interact — ensure they are compatible with each other
+5. Do NOT refactor surrounding code or make unrelated changes
+6. Do NOT add comments explaining fixes unless the logic is non-obvious
+
+Apply all fixes now.
+
+After applying all fixes, output a context block in this exact format:
+<FIX_CONTEXT>
+Approach: [what you changed for each issue and why]
+Alternatives rejected: [other approaches you considered but did not use, with reasons]
+Tradeoffs: [any limitations, downsides, or scope boundaries of these fixes]
+</FIX_CONTEXT>`;
+}
+
+/**
  * Build a retry prompt that gives the agent context about the failed attempt:
  * the original finding, the diff that was rejected, and the reviewer's concern.
  */

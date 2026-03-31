@@ -3,13 +3,15 @@ import type { SuggestionCluster } from "../dedup/index.js";
 import type { ParallelFixProgress } from "./run-parallel-fix.js";
 
 const {
-  mockRunParallelFix, mockMergeBranch, mockAbortMerge, mockGetChangedFiles,
+  mockRunParallelFix, mockRunGroupedFix,
+  mockMergeBranch, mockAbortMerge, mockGetChangedFiles,
   mockEnsureClean, mockGetCurrentBranch, mockCreateWorktree,
   mockRemoveWorktree, mockPruneWorktrees, mockCleanupBase,
   mockCaptureDiff, mockCommitFix, mockRecordFix, mockRecordDiscardedFix,
   mockIsAvailable, mockAdapterRun, mockResetLastCommit,
 } = vi.hoisted(() => ({
   mockRunParallelFix: vi.fn(),
+  mockRunGroupedFix: vi.fn(),
   mockMergeBranch: vi.fn().mockResolvedValue(undefined),
   mockAbortMerge: vi.fn().mockResolvedValue(undefined),
   mockGetChangedFiles: vi.fn().mockResolvedValue([]),
@@ -33,6 +35,10 @@ const {
 
 vi.mock("./run-parallel-fix.js", () => ({
   runParallelFix: mockRunParallelFix,
+}));
+
+vi.mock("./run-grouped-fix.js", () => ({
+  runGroupedFix: mockRunGroupedFix,
 }));
 
 vi.mock("../branch/index.js", () => ({
@@ -452,5 +458,88 @@ describe("runBatchedFix", () => {
 
     // No onProgress — should not throw
     await expect(runBatchedFix({ repoPath: "/repo", clusters, auto: true })).resolves.toBeDefined();
+  });
+
+  it("routes same-file clusters to runGroupedFix instead of serial", async () => {
+    // 2 disjoint files + 3 same-file clusters
+    const clusters = [
+      makeCluster("a", "src/a.ts"),
+      makeCluster("b", "src/b.ts"),
+      makeCluster("c1", "src/c.ts"),
+      makeCluster("c2", "src/c.ts"),
+      makeCluster("c3", "src/c.ts"),
+    ];
+
+    // Phase 1: a + b + c1 (disjoint), c2 and c3 deferred
+    mockRunParallelFix.mockResolvedValue(
+      makeParallelResult(["br-a", "br-b", "br-c1"]),
+    );
+
+    // Phase 2: grouped fix for [c2, c3]
+    mockRunGroupedFix.mockResolvedValue(
+      makeParallelResult(["br-grouped"]),
+    );
+
+    // Return actual files so touchedFiles prevents Phase 1 from consuming c2/c3
+    mockGetChangedFiles
+      .mockResolvedValueOnce(["src/a.ts"])
+      .mockResolvedValueOnce(["src/b.ts"])
+      .mockResolvedValueOnce(["src/c.ts"])
+      .mockResolvedValue([]);
+
+    const result = await runBatchedFix({
+      repoPath: "/repo", clusters, auto: true, concurrency: 5,
+    });
+
+    // runParallelFix handles the parallel phase
+    expect(mockRunParallelFix).toHaveBeenCalledTimes(1);
+    // runGroupedFix handles the same-file group
+    expect(mockRunGroupedFix).toHaveBeenCalledTimes(1);
+    const groupedClusters = mockRunGroupedFix.mock.calls[0]![0].clusters;
+    expect(groupedClusters).toHaveLength(2);
+    expect(groupedClusters[0].id).toBe("c2");
+    expect(groupedClusters[1].id).toBe("c3");
+    // All branches merged
+    expect(result.keptBranches).toHaveLength(4); // br-a, br-b, br-c1, br-grouped
+  });
+
+  it("falls back to serial when grouped fix merge fails", async () => {
+    // All 3 clusters on the same file
+    const clusters = [
+      makeCluster("a1", "src/a.ts"),
+      makeCluster("a2", "src/a.ts"),
+      makeCluster("a3", "src/a.ts"),
+    ];
+
+    // Phase 1: a1 goes first, a2+a3 deferred
+    mockRunParallelFix
+      .mockResolvedValueOnce(makeParallelResult(["br-a1"])) // phase 1
+      .mockResolvedValueOnce(makeParallelResult(["br-a2"])) // serial fallback for a2
+      .mockResolvedValueOnce(makeParallelResult(["br-a3"])); // serial fallback for a3
+
+    // Grouped fix succeeds but merge fails
+    mockRunGroupedFix.mockResolvedValue(
+      makeParallelResult(["br-grouped"]),
+    );
+
+    mockMergeBranch
+      .mockResolvedValueOnce(undefined) // br-a1 OK
+      .mockRejectedValueOnce(new Error("merge conflict")) // br-grouped fails
+      .mockResolvedValueOnce(undefined) // br-a2 OK (serial fallback)
+      .mockResolvedValueOnce(undefined); // br-a3 OK (serial fallback)
+
+    // Return actual file so touchedFiles blocks a2/a3 from Phase 1
+    mockGetChangedFiles
+      .mockResolvedValueOnce(["src/a.ts"])
+      .mockResolvedValue([]);
+
+    const result = await runBatchedFix({
+      repoPath: "/repo", clusters, auto: true,
+    });
+
+    // Grouped fix was attempted
+    expect(mockRunGroupedFix).toHaveBeenCalledTimes(1);
+    // Phase 1 (a1) + serial fallbacks for a2 and a3
+    expect(mockRunParallelFix).toHaveBeenCalledTimes(3);
   });
 });

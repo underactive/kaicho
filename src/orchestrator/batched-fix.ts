@@ -10,7 +10,10 @@ import {
   type ParallelFixRetryAction,
 } from "./run-parallel-fix.js";
 import { mergeBranch, abortMerge, getChangedFiles, getCurrentBranch } from "../branch/index.js";
+import { runGroupedFix } from "./run-grouped-fix.js";
 import { log } from "../logger/index.js";
+
+const MAX_GROUP_SIZE = 10;
 
 // Re-export types that callers need
 export type {
@@ -223,19 +226,58 @@ async function runBatchLoop(
 }
 
 /**
+ * Group remaining clusters by file for the serial phase.
+ * Files with 2+ clusters become groups (capped at MAX_GROUP_SIZE).
+ * Files with 1 cluster go to singles for standard serial processing.
+ */
+function buildSerialGroups(
+  remaining: SuggestionCluster[],
+): { groups: SuggestionCluster[][]; singles: SuggestionCluster[] } {
+  const byFile = new Map<string, SuggestionCluster[]>();
+  for (const c of remaining) {
+    const arr = byFile.get(c.file) ?? [];
+    arr.push(c);
+    byFile.set(c.file, arr);
+  }
+
+  const groups: SuggestionCluster[][] = [];
+  const singles: SuggestionCluster[] = [];
+
+  for (const [, fileClusters] of byFile) {
+    if (fileClusters.length === 1) {
+      singles.push(fileClusters[0]!);
+    } else {
+      // Cap at MAX_GROUP_SIZE; overflow becomes additional groups
+      for (let i = 0; i < fileClusters.length; i += MAX_GROUP_SIZE) {
+        const chunk = fileClusters.slice(i, i + MAX_GROUP_SIZE);
+        if (chunk.length === 1) {
+          singles.push(chunk[0]!);
+        } else {
+          groups.push(chunk);
+        }
+      }
+    }
+  }
+
+  return { groups, singles };
+}
+
+/**
  * Run fixes in file-disjoint batches with informed grouping.
  *
- * Two-phase execution prevents branch drift:
+ * Three-phase execution prevents branch drift:
  *
  * **Phase 1 — Parallel only.** Build file-disjoint batches and run them
  * concurrently in worktrees. After each batch, squash-merge kept branches
  * and record touched files. Repeat until no more disjoint batches can be
  * formed. No serial fallback occurs in this phase.
  *
- * **Phase 2 — Serial + parallel.** Process remaining clusters (which all
- * conflict with previously touched files). Allows serial fallback so
- * clusters run one-at-a-time. After each merge, re-checks for new
- * parallel opportunities.
+ * **Phase 2 — Grouped same-file fixes.** Clusters that share a file are
+ * grouped and processed in a single agent session (one worktree, one prompt,
+ * one merge). This avoids the per-cluster serial overhead.
+ *
+ * **Phase 3 — Serial singles.** Remaining single-cluster files are processed
+ * one-at-a-time with the existing serial fallback.
  */
 export async function runBatchedFix(options: BatchedFixOptions): Promise<BatchedFixResult> {
   const concurrency = options.concurrency ?? 3;
@@ -253,7 +295,7 @@ export async function runBatchedFix(options: BatchedFixOptions): Promise<Batched
     concurrency, 0, false, progress, globalTotal,
   );
 
-  // Phase 2: serial fixes + new parallel opportunities
+  // Phase 2+3: grouped same-file fixes, then serial singles
   if (afterParallel.length > 0) {
     log("info", "Parallel phase complete, starting serial phase", {
       parallelBatches: batchNum,
@@ -261,10 +303,67 @@ export async function runBatchedFix(options: BatchedFixOptions): Promise<Batched
       touchedFiles: touchedFiles.size,
     });
 
-    ({ remaining: afterParallel, batchNum } = await runBatchLoop(
-      options, afterParallel, touchedFiles, allItems, allKeptBranches,
-      concurrency, batchNum, true, progress, globalTotal,
-    ));
+    const { groups, singles } = buildSerialGroups(afterParallel);
+
+    // Phase 2: grouped same-file fixes
+    for (const group of groups) {
+      batchNum++;
+      log("info", "Running grouped fix", {
+        batch: batchNum,
+        file: group[0]!.file,
+        size: group.length,
+        touchedFiles: touchedFiles.size,
+      });
+
+      const currentOffset = progress.offset;
+      const wrappedProgress: typeof options.onProgress = options.onProgress
+        ? (p) => {
+            if (p.step === "done") return;
+            options.onProgress!({
+              ...p,
+              current: currentOffset + p.current,
+              total: globalTotal,
+            });
+          }
+        : undefined;
+
+      const groupResult = await runGroupedFix({
+        repoPath: options.repoPath,
+        clusters: group,
+        agent: options.agent,
+        timeoutMs: options.timeoutMs,
+        models: options.models,
+        scanModels: options.scanModels,
+        auto: options.auto,
+        verbose: options.verbose,
+        validate: options.validate,
+        reviewer: options.reviewer,
+        fixLogPath: options.fixLogPath,
+        onProgress: wrappedProgress,
+        onConfirm: options.onConfirm,
+      });
+
+      progress.offset += group.length;
+      allItems.push(...groupResult.items);
+
+      const { merged, failed } = await mergeAndRecord(
+        options.repoPath, groupResult.keptBranches, touchedFiles,
+      );
+      allKeptBranches.push(...merged);
+
+      // On merge failure, re-queue as singles for individual serial processing
+      if (failed.length > 0) {
+        singles.push(...group);
+      }
+    }
+
+    // Phase 3: serial singles + new parallel opportunities
+    if (singles.length > 0) {
+      ({ remaining: afterParallel, batchNum } = await runBatchLoop(
+        options, singles, touchedFiles, allItems, allKeptBranches,
+        concurrency, batchNum, true, progress, globalTotal,
+      ));
+    }
   }
 
   // Single final "done" event (per-batch "done" events are suppressed)
