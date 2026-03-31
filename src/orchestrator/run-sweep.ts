@@ -288,6 +288,12 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
           prevLayers.push({ layer, criticalHigh });
         } catch (err) {
           log("error", "Layer failed, continuing", { round, layer: layer.layer, error: String(err) });
+          // Safety net: if a layer left the worktree dirty (e.g. unresolved
+          // squash-merge conflict), clean it up so the next layer can start.
+          await execa("git", ["reset", "--merge"], {
+            cwd: sweepWorktreePath,
+            reject: false,
+          });
         }
       }
 

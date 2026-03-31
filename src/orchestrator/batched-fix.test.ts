@@ -204,7 +204,7 @@ describe("runBatchedFix", () => {
     expect(mockRunParallelFix.mock.calls[1]![0].clusters).toHaveLength(2);
   });
 
-  it("handles merge failure gracefully and aborts the merge", async () => {
+  it("recovers from squash-merge conflict via git reset --merge", async () => {
     const clusters = [makeCluster("a", "src/a.ts")];
     mockRunParallelFix.mockResolvedValue(makeParallelResult(["br-a"]));
     mockMergeBranch.mockRejectedValue(new Error("merge conflict"));
@@ -214,8 +214,80 @@ describe("runBatchedFix", () => {
     // Merge failed but didn't crash
     expect(result.keptBranches).toEqual([]);
     expect(result.totalKept).toBe(0);
-    // Working tree was cleaned up
+    // Working tree was cleaned up via abortMerge (git reset --merge)
     expect(mockAbortMerge).toHaveBeenCalledWith("/repo");
+  });
+
+  it("recovers from consecutive merge failures without cascading", async () => {
+    // Simulates the ghost_operator Layer 6 scenario: 5 branches in a parallel
+    // batch, first 2 merge OK, last 3 all conflict on the same file.
+    const clusters = [
+      makeCluster("a", "src/a.ts"),
+      makeCluster("b", "src/b.ts"),
+      makeCluster("c", "src/c.ts"),
+      makeCluster("d", "src/d.ts"),
+      makeCluster("e", "src/e.ts"),
+    ];
+
+    function makeItemsForBatch(
+      pairs: { clusterId: string; branch: string }[],
+    ) {
+      return {
+        items: pairs.map((p) => ({
+          clusterId: p.clusterId, file: "test.ts", agent: "claude",
+          branch: p.branch, worktreePath: "/tmp",
+          status: "applied" as const, filesChanged: 1, durationMs: 100, diff: "diff",
+        })),
+        keptBranches: pairs.map((p) => p.branch),
+        totalApplied: pairs.length, totalSkipped: 0, totalFailed: 0,
+        totalKept: pairs.length, totalDiscarded: 0, totalDurationMs: 100,
+      };
+    }
+
+    let batchNum = 0;
+    mockRunParallelFix.mockImplementation(async () => {
+      batchNum++;
+      if (batchNum === 1) {
+        return makeItemsForBatch([
+          { clusterId: "a", branch: "br-a" },
+          { clusterId: "b", branch: "br-b" },
+          { clusterId: "c", branch: "br-c" },
+          { clusterId: "d", branch: "br-d" },
+          { clusterId: "e", branch: "br-e" },
+        ]);
+      }
+      // Retry batch: deferred clusters succeed
+      return makeItemsForBatch([
+        { clusterId: "c", branch: "br-c2" },
+        { clusterId: "d", branch: "br-d2" },
+        { clusterId: "e", branch: "br-e2" },
+      ]);
+    });
+
+    // First 2 merges OK, next 3 all fail (consecutive conflicts)
+    mockMergeBranch
+      .mockResolvedValueOnce(undefined)  // br-a OK
+      .mockResolvedValueOnce(undefined)  // br-b OK
+      .mockRejectedValueOnce(new Error("CONFLICT in ghost_operator.ino"))
+      .mockRejectedValueOnce(new Error("unmerged files"))
+      .mockRejectedValueOnce(new Error("unmerged files"))
+      // Retry batch: all succeed
+      .mockResolvedValueOnce(undefined)  // br-c2 OK
+      .mockResolvedValueOnce(undefined)  // br-d2 OK
+      .mockResolvedValueOnce(undefined); // br-e2 OK
+
+    mockGetChangedFiles.mockResolvedValue([]);
+
+    const result = await runBatchedFix({
+      repoPath: "/repo", clusters, auto: true, concurrency: 5,
+    });
+
+    // abortMerge called once per failed merge (3 times)
+    expect(mockAbortMerge).toHaveBeenCalledTimes(3);
+    // All 5 clusters eventually merged (2 direct + 3 retried)
+    expect(result.totalKept).toBe(5);
+    // Two batches ran
+    expect(mockRunParallelFix).toHaveBeenCalledTimes(2);
   });
 
   it("defers merge-conflicted clusters for retry in next batch", async () => {

@@ -189,9 +189,13 @@ export async function getChangedFiles(
 /**
  * Abort an in-progress merge, restoring the working tree to HEAD.
  * Used after a squash-merge conflict to clean up before the next merge.
+ *
+ * Uses `git reset --merge` instead of `git merge --abort` because
+ * `--squash` merges do not create MERGE_HEAD, so `--abort` silently
+ * fails and leaves conflict markers in the working tree.
  */
 export async function abortMerge(repoPath: string): Promise<void> {
-  await execa("git", ["merge", "--abort"], {
+  await execa("git", ["reset", "--merge"], {
     cwd: repoPath,
     reject: false,
   });
