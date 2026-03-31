@@ -41,7 +41,11 @@ const CATEGORY_ALIASES: Record<string, Category> = {
 function normalizeCategory(v: unknown): unknown {
   if (typeof v !== "string") return v;
   const lower = v.toLowerCase();
-  return CATEGORY_ALIASES[lower] ?? lower;
+  if (CATEGORY_ALIASES[lower]) return CATEGORY_ALIASES[lower];
+  // If the value is already a valid enum value, pass it through
+  if (CategoryEnum.safeParse(lower).success) return lower;
+  // Unknown category — map to "bug" rather than rejecting the entire suggestion
+  return "bug";
 }
 
 /**
