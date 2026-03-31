@@ -36,6 +36,8 @@ export interface SweepOptions {
   validate?: boolean;
   reviewer?: string;
   verbose?: boolean;
+  /** Run a full re-scan after all rounds to populate the remaining-findings report. Off by default. */
+  finalScan?: boolean;
   onLayerStart?: (round: number, layer: SweepLayer) => void;
   onLayerComplete?: (round: number, result: SweepLayerResult) => void;
   onRoundComplete?: (result: SweepRoundResult) => void;

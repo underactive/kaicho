@@ -334,22 +334,25 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     log("error", "Sweep failed", { error: String(err) });
   }
 
-  // Collect remaining findings across all tasks (scan worktree, fix-log from original repo)
+  // Collect remaining findings across all tasks (scan worktree, fix-log from original repo).
+  // Skipped by default — this is an expensive full re-scan across all layers. Enable with --final-scan.
   const remaining: SweepRemaining[] = [];
-  for (const layer of SWEEP_LAYERS) {
-    const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
-    const unfixed = await filterFixed(clusters, absRepoPath);
-    for (const c of unfixed) {
-      remaining.push({
-        clusterId: c.id,
-        file: c.file,
-        line: c.line,
-        severity: c.severity,
-        category: c.category,
-        task: layer.tasks[0] ?? "unknown",
-        rationale: c.rationales[0]?.rationale ?? "",
-        reason: "not-fixed",
-      });
+  if (options.finalScan) {
+    for (const layer of SWEEP_LAYERS) {
+      const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
+      const unfixed = await filterFixed(clusters, absRepoPath);
+      for (const c of unfixed) {
+        remaining.push({
+          clusterId: c.id,
+          file: c.file,
+          line: c.line,
+          severity: c.severity,
+          category: c.category,
+          task: layer.tasks[0] ?? "unknown",
+          rationale: c.rationales[0]?.rationale ?? "",
+          reason: "not-fixed",
+        });
+      }
     }
   }
 

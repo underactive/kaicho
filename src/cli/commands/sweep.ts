@@ -24,6 +24,7 @@ export const sweepCommand = new Command("sweep")
   .option("--validate", "Cross-agent validation on fixes")
   .option("--reviewer <agent>", "Reviewer agent for validation")
   .option("--concurrency <n>", "Parallel fix concurrency")
+  .option("--final-scan", "Run a full re-scan after all rounds to report remaining findings")
   .option("--verbose", "Show detailed output")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;
@@ -107,6 +108,7 @@ export const sweepCommand = new Command("sweep")
       validate: opts.validate === true,
       reviewer: opts.reviewer as string | undefined ?? config.reviewer,
       verbose: opts.verbose === true,
+      finalScan: opts.finalScan === true,
       onLayerStart,
       onLayerComplete,
       onRoundComplete,
