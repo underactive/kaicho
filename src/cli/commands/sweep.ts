@@ -1,4 +1,5 @@
 import * as os from "node:os";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { Command } from "commander";
 import { runSweep } from "../../orchestrator/run-sweep.js";
@@ -33,6 +34,18 @@ export const sweepCommand = new Command("sweep")
       : path.resolve(rawRepo);
 
     const config = await loadConfig(repoPath);
+
+    // Tee all stderr output to a log file in .kaicho/
+    const kaichoDir = path.join(repoPath, ".kaicho");
+    fs.mkdirSync(kaichoDir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const logPath = path.join(kaichoDir, `sweep-${timestamp}.log`);
+    const logStream = fs.createWriteStream(logPath);
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
+      logStream.write(chunk);
+      return originalWrite(chunk, ...args as [BufferEncoding?, ((err?: Error) => void)?]);
+    }) as typeof process.stderr.write;
 
     const agentsList = opts.agents
       ? (opts.agents as string).split(",").map((s: string) => s.trim())
@@ -137,7 +150,12 @@ export const sweepCommand = new Command("sweep")
         process.stderr.write(`  ${color("Regressions flagged — review before merging: .kaicho/sweep-regressions.json", "\x1b[33m")}\n`);
       }
       process.stderr.write(`  Branch: ${report.sweepBranch} (not checked out)\n`);
+      process.stderr.write(`  Log: ${path.relative(repoPath, logPath)}\n`);
     } else {
       process.stdout.write(JSON.stringify(report, null, 2) + "\n");
     }
+
+    // Restore stderr and close log file
+    process.stderr.write = originalWrite;
+    logStream.end();
   });
