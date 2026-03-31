@@ -80,7 +80,6 @@ function buildDiscardedEntry(
   clusterId: string,
   cluster: SuggestionCluster,
   agent: string,
-  branch: string,
   diff: string,
   validation: ValidateResult | undefined,
   reason: DiscardedFixEntry["reason"],
@@ -92,9 +91,10 @@ function buildDiscardedEntry(
     category: cluster.category,
     severity: cluster.severity,
     summary: cluster.summary ?? null,
-    agent,
-    branch,
-    diff,
+    fixAgent: agent,
+    fixDiff: diff,
+    fixerContext: null,
+    reviewer: validation?.reviewer ?? null,
     verdict: validation?.verdict ?? null,
     reviewerRationale: validation?.rationale ?? null,
     retryAttempted: false,
@@ -260,7 +260,7 @@ export async function runGroupedFix(
       if (validation?.verdict === "concern") {
         for (const c of clusters) {
           await recordDiscardedFix(fixLogRoot, buildDiscardedEntry(
-            c.id, c, agentName, branch, diff, validation, "auto-concern",
+            c.id, c, agentName, diff, validation, "auto-concern",
           ));
         }
         await removeFixWorktree(absRepoPath, worktreePath, branch, true);
@@ -291,7 +291,7 @@ export async function runGroupedFix(
         // Discard (or retry request — not supported for groups, treat as discard)
         for (const c of clusters) {
           await recordDiscardedFix(fixLogRoot, buildDiscardedEntry(
-            c.id, c, agentName, branch, diff, validation, "user-discard",
+            c.id, c, agentName, diff, validation, "user-discard",
           ));
         }
         await removeFixWorktree(absRepoPath, worktreePath, branch, true);

@@ -44,7 +44,7 @@ export const sweepCommand = new Command("sweep")
     const originalWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
       logStream.write(chunk);
-      return originalWrite(chunk, ...args as [BufferEncoding?, ((err?: Error) => void)?]);
+      return (originalWrite as (...a: unknown[]) => boolean)(chunk, ...args);
     }) as typeof process.stderr.write;
 
     const agentsList = opts.agents
