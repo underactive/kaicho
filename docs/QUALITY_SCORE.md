@@ -19,7 +19,7 @@ cleanup and investment.
 | Domain            | Grade | Notes                                          | Last reviewed |
 |-------------------|-------|-------------------------------------------------|---------------|
 | `agent-adapters`  | A     | 4 adapters, 25 tests, verbose stderr, non-interactive flags | 2026-03-27 |
-| `output-parser`   | A     | 3 parse paths, per-item validation, 15 tests    | 2026-03-26    |
+| `output-parser`   | A     | 3 parse paths, field normalization, wrapper key fallback, 25 tests | 2026-03-31 |
 | `suggestion-store`| A     | Symlink/traversal protection, 6 tests           | 2026-03-26    |
 | `dedup`           | A     | Proximity clustering, severity filter, 12 tests | 2026-03-26    |
 | `scope`           | A     | git ls-files + fallback, glob matching, 9 tests | 2026-03-26    |
@@ -40,7 +40,7 @@ cleanup and investment.
 |-------------------|-------|-------------------------------------------------|---------------|
 | Logging           | B+    | Structured JSON to stderr, ~10 call sites       | 2026-03-26    |
 | Error handling    | A     | Adapters never throw, parse-at-boundary enforced | 2026-03-26    |
-| Test coverage     | A     | 289 tests across 22 files, all critical domains covered | 2026-03-29 |
+| Test coverage     | A     | 413 tests across 24 files, all critical domains covered | 2026-03-31 |
 | Documentation     | B+    | README, specs, exec plan, architecture doc       | 2026-03-26    |
 
 ## Process

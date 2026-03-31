@@ -187,8 +187,8 @@ CLI flags override config values.
 
 ## How it works
 
-1. **Scan** — Fingerprints the target repo (language, framework, test runner, linters, etc.) and injects best-effort project context into the prompt. In monorepos, workspace packages are resolved and fingerprinted individually. Spawns each agent CLI as a subprocess with structured output flags. Agents run in parallel.
-2. **Parse** — Agent output is extracted via JSON schema enforcement (Claude, Codex) or text parsing (Cursor, Gemini). Every suggestion is validated with Zod.
+1. **Scan** — Fingerprints the target repo (language, framework, test runner, linters, etc.) and injects best-effort project context into the prompt. In monorepos, workspace packages are resolved and fingerprinted individually. Spawns each agent CLI as a subprocess. Agents run in parallel.
+2. **Parse** — Agent output is extracted from freeform text via multi-strategy parsing (direct JSON, code fences, brace extraction). Field names are normalized to handle LLM drift. Every suggestion is validated with Zod.
 3. **Cluster** — Suggestions are grouped by file + line proximity (±5 lines), then merged by rationale keyword similarity. Cross-agent agreement surfaces first.
 4. **Enrich** — If Ollama is running, each cluster gets a one-line LLM summary. Cached per-task.
 5. **Store** — Results saved to `.kaicho/runs/` as JSON. Enrichment cached in `.kaicho/enriched-*.json`.
