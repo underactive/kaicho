@@ -202,9 +202,11 @@ async function executeLayer(
     }
   }
 
-  // Count post-fix critical/high for this layer (for next layer's regression baseline)
-  const postFixScan = await scanLayer(layer, sweepWorktreePath, options);
-  const criticalHigh = countCriticalHigh(postFixScan.clusters);
+  // Count post-fix critical/high for this layer (for next layer's regression baseline).
+  // Skip the re-scan if no fixes were merged — code hasn't changed.
+  const criticalHigh = mergedBranches.length > 0
+    ? countCriticalHigh((await scanLayer(layer, sweepWorktreePath, options)).clusters)
+    : countCriticalHigh(clusters);
 
   const result: SweepLayerResult = {
     layer: layer.layer,
