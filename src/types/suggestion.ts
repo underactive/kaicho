@@ -13,6 +13,37 @@ export const CategoryEnum = z.enum([
 ]);
 export type Category = z.infer<typeof CategoryEnum>;
 
+/** Map common agent-invented categories to valid enum values. */
+const CATEGORY_ALIASES: Record<string, Category> = {
+  race: "bug",
+  "race-condition": "bug",
+  concurrency: "bug",
+  error: "bug",
+  "error-handling": "bug",
+  reliability: "bug",
+  correctness: "bug",
+  logic: "bug",
+  memory: "performance",
+  "memory-leak": "performance",
+  optimization: "performance",
+  docs: "documentation",
+  typing: "maintainability",
+  refactor: "maintainability",
+  complexity: "maintainability",
+  "code-quality": "maintainability",
+  formatting: "style",
+  naming: "style",
+  vulnerability: "security",
+  auth: "security",
+  injection: "security",
+};
+
+function normalizeCategory(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const lower = v.toLowerCase();
+  return CATEGORY_ALIASES[lower] ?? lower;
+}
+
 /**
  * Uses `.nullable()` instead of `.optional()` so the zod schema aligns with
  * OpenAI's strict JSON Schema requirement where every property must appear in
@@ -21,7 +52,7 @@ export type Category = z.infer<typeof CategoryEnum>;
 export const SuggestionSchema = z.object({
   file: z.string().min(1),
   line: z.number().int().positive().nullable(),
-  category: z.preprocess((v) => (typeof v === "string" ? v.toLowerCase() : v), CategoryEnum),
+  category: z.preprocess(normalizeCategory, CategoryEnum),
   severity: z.preprocess((v) => (typeof v === "string" ? v.toLowerCase() : v), SeverityEnum),
   rationale: z.string().min(1),
   suggestedChange: z.string().nullable(),
