@@ -343,7 +343,7 @@ export async function runBatchedFix(options: BatchedFixOptions): Promise<Batched
         onConfirm: options.onConfirm,
       });
 
-      progress.offset += group.length;
+      progress.offset += 1; // group occupies one progress slot
       allItems.push(...groupResult.items);
 
       const { merged, failed } = await mergeAndRecord(
