@@ -56,9 +56,13 @@ export const sweepCommand = new Command("sweep")
       ? (opts.exclude as string).split(",").map((s: string) => s.trim())
       : undefined;
 
-    const maxRounds = opts.maxRounds
+    let maxRounds = opts.maxRounds
       ? parseInt(opts.maxRounds as string, 10)
       : config.maxSweepRounds ?? DEFAULT_MAX_ROUNDS;
+
+    if (opts.twoPass && maxRounds < 2) {
+      maxRounds = 2;
+    }
 
     const isTTY = process.stderr.isTTY;
 
