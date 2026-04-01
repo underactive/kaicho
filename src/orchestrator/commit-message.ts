@@ -35,15 +35,7 @@ export function buildCommitMessage(
   const title = cluster.summary
     ?? truncate(cluster.rationales[0]?.rationale ?? "fix applied", 72);
 
-  const agentList = cluster.agents
-    .map((a) => {
-      const display = a.charAt(0).toUpperCase() + a.slice(1);
-      const m = scanModels?.[a];
-      return m ? `${display} (${m})` : display;
-    })
-    .join(", ");
-  const agreement = cluster.agreement > 1 ? ` {${cluster.agreement}x agreement}` : "";
-  const foundBy = `${agentList}${agreement}`;
+  const foundBy = formatFoundBy(cluster, scanModels);
 
   const lines: string[] = [
     `fix: ${title}`,
@@ -64,13 +56,7 @@ export function buildCommitMessage(
     lines.push("", `Suggested change: ${cluster.suggestedChange}`);
   }
 
-  const fixer = formatAgent(agent, model);
-  if (reviewer) {
-    const rev = formatAgent(reviewer.name, reviewer.model);
-    lines.push("", `Fixed by ${fixer} and reviewed by ${rev}, applied via Kaichō`);
-  } else {
-    lines.push("", `Fixed by ${fixer}, applied via Kaichō`);
-  }
+  lines.push("", buildFooter(agent, model, reviewer));
 
   return lines.join("\n");
 }
@@ -99,31 +85,71 @@ export function buildGroupCommitMessage(
   reviewer?: CommitMessageReviewer,
 ): string {
   const file = clusters[0]!.file;
-  const ids = clusters.map((c) => c.id).join("+");
   const categories = [...new Set(clusters.map((c) => c.category))].join(", ");
 
-  const lines: string[] = [
-    `fix(${ids}): fix ${clusters.length} issues in ${file}`,
-    "",
+  // Header
+  const headerLines = [
+    `Summary:`,
     `File: ${file}`,
     `Issues: ${clusters.length} (${categories})`,
   ];
+  const headerDivider = "-".repeat(Math.max(...headerLines.map((l) => l.length)));
 
-  for (const cluster of clusters) {
-    const summary = cluster.summary
-      ?? truncate(cluster.rationales[0]?.rationale ?? "fix applied", 60);
-    lines.push(`[${cluster.id}] ${summary} (${cluster.severity})`);
+  const lines: string[] = [
+    `fix: fix ${clusters.length} issues in ${file}`,
+    "",
+    ...headerLines,
+    "",
+    headerDivider,
+  ];
+
+  // Individual cluster reports
+  for (let i = 0; i < clusters.length; i++) {
+    const cluster = clusters[i]!;
+    const foundBy = formatFoundBy(cluster, scanModels);
+    const rationale = cluster.rationales[0]?.rationale ?? "fix applied";
+
+    lines.push(
+      "",
+      `Kaichō ref: ${cluster.id}`,
+      `Severity: ${cluster.severity} | Category: ${cluster.category}`,
+      `Found by: ${foundBy}`,
+      "",
+      rationale,
+    );
+
+    if (i < clusters.length - 1) {
+      lines.push("", "-----");
+    }
   }
 
+  // Footer
+  const footer = buildFooter(agent, model, reviewer);
+  const footerDivider = "-".repeat(footer.length);
+  lines.push("", footerDivider, "", footer);
+
+  return lines.join("\n");
+}
+
+function formatFoundBy(cluster: SuggestionCluster, scanModels?: Record<string, string>): string {
+  const agentList = cluster.agents
+    .map((a) => {
+      const display = a.charAt(0).toUpperCase() + a.slice(1);
+      const m = scanModels?.[a];
+      return m ? `${display} (${m})` : display;
+    })
+    .join(", ");
+  const agreement = cluster.agreement > 1 ? ` {${cluster.agreement}x agreement}` : "";
+  return `${agentList}${agreement}`;
+}
+
+function buildFooter(agent: string, model?: string, reviewer?: CommitMessageReviewer): string {
   const fixer = formatAgent(agent, model);
   if (reviewer) {
     const rev = formatAgent(reviewer.name, reviewer.model);
-    lines.push("", `Fixed by ${fixer} and reviewed by ${rev}, applied via Kaichō`);
-  } else {
-    lines.push("", `Fixed by ${fixer}, applied via Kaichō`);
+    return `Fixed by ${fixer} and reviewed by ${rev}, applied via Kaichō`;
   }
-
-  return lines.join("\n");
+  return `Fixed by ${fixer}, applied via Kaichō`;
 }
 
 function truncate(text: string, maxLen: number): string {

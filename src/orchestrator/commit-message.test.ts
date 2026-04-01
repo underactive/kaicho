@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCommitMessage } from "./commit-message.js";
+import { buildCommitMessage, buildGroupCommitMessage } from "./commit-message.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
 function makeCluster(overrides: Partial<SuggestionCluster> = {}): SuggestionCluster {
@@ -149,5 +149,107 @@ describe("buildCommitMessage", () => {
       name: "claude:sonnet[1m]",
     });
     expect(msg).toContain("reviewed by Claude (sonnet[1m])");
+  });
+});
+
+describe("buildGroupCommitMessage", () => {
+  function makeGroupClusters(): SuggestionCluster[] {
+    return [
+      {
+        id: "dbbc4a",
+        file: "supabase/functions/verify-password/index.ts",
+        line: 10,
+        category: "bug",
+        severity: "high",
+        agents: ["claude", "cursor:gm"],
+        agreement: 2,
+        rationales: [{ agent: "claude", rationale: "timingSafeEqual leaks timing info" }],
+        suggestedChange: null,
+        items: [],
+      },
+      {
+        id: "44cd9a",
+        file: "supabase/functions/verify-password/index.ts",
+        line: 3,
+        category: "bug",
+        severity: "medium",
+        agents: ["cursor:comp"],
+        agreement: 1,
+        rationales: [{ agent: "cursor:comp", rationale: "changeme fallback disables password gate" }],
+        suggestedChange: null,
+        items: [],
+      },
+    ];
+  }
+
+  it("uses clean subject without cluster IDs", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
+    const title = msg.split("\n")[0]!;
+    expect(title).toBe("fix: fix 2 issues in supabase/functions/verify-password/index.ts");
+    expect(title).not.toContain("dbbc4a");
+    expect(title).not.toContain("44cd9a");
+  });
+
+  it("includes summary header with file and issue count", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
+    expect(msg).toContain("Summary:");
+    expect(msg).toContain("File: supabase/functions/verify-password/index.ts");
+    expect(msg).toContain("Issues: 2 (bug)");
+  });
+
+  it("includes individual cluster reports with Kaichō ref", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
+    expect(msg).toContain("Kaichō ref: dbbc4a");
+    expect(msg).toContain("Kaichō ref: 44cd9a");
+  });
+
+  it("includes severity, category, and found-by per cluster", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude", undefined, {
+      claude: "sonnet[1m]",
+      "cursor:gm": "gemini-3-flash",
+      "cursor:comp": "composer-2-fast",
+    });
+    expect(msg).toContain("Severity: high | Category: bug");
+    expect(msg).toContain("Severity: medium | Category: bug");
+    expect(msg).toContain("Found by: Claude (sonnet[1m]), Cursor:gm (gemini-3-flash) {2x agreement}");
+    expect(msg).toContain("Found by: Cursor:comp (composer-2-fast)");
+  });
+
+  it("includes rationale for each cluster", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
+    expect(msg).toContain("timingSafeEqual leaks timing info");
+    expect(msg).toContain("changeme fallback disables password gate");
+  });
+
+  it("has divider after header and before footer", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
+    const msgLines = msg.split("\n");
+
+    // Header divider: line of dashes after the header block
+    const headerDividerIdx = msgLines.findIndex((l, i) => i > 2 && /^-{5,}$/.test(l));
+    expect(headerDividerIdx).toBeGreaterThan(0);
+
+    // Footer divider: line of dashes before the footer
+    const footerIdx = msgLines.findIndex((l: string) => l.startsWith("Fixed by"));
+    let footerDividerIdx = -1;
+    for (let i = footerIdx - 1; i > headerDividerIdx; i--) {
+      if (/^-{5,}$/.test(msgLines[i]!)) { footerDividerIdx = i; break; }
+    }
+    expect(footerDividerIdx).toBeGreaterThan(headerDividerIdx);
+  });
+
+  it("shows footer only once at the end", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude", "opus[1m]", undefined, {
+      name: "cursor:grok",
+      model: "grok-4-20",
+    });
+    const footerMatches = msg.match(/Fixed by/g);
+    expect(footerMatches).toHaveLength(1);
+    expect(msg).toContain("Fixed by Claude (opus[1m]) and reviewed by Cursor (grok-4-20), applied via Kaichō");
+  });
+
+  it("uses ----- divider between clusters", () => {
+    const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
+    expect(msg).toContain("\n-----\n");
   });
 });
