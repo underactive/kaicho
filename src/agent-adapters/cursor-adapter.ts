@@ -4,6 +4,21 @@ import { DEFAULT_TIMEOUT_MS } from "../config/index.js";
 import { parseFromText } from "../output-parser/index.js";
 import { log } from "../logger/index.js";
 
+/**
+ * Serialize all Cursor CLI invocations to avoid file-lock races on
+ * ~/.cursor/cli-config.json (a global config file written at CLI startup).
+ * All CursorAdapter instances share this chain regardless of variant.
+ */
+let cliChain: Promise<void> = Promise.resolve();
+
+function withCliLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release: () => void;
+  const next = new Promise<void>((r) => { release = r; });
+  const prev = cliChain;
+  cliChain = next;
+  return prev.then(fn).finally(() => release!());
+}
+
 export class CursorAdapter implements AgentAdapter {
   readonly config: AgentConfig;
 
@@ -26,6 +41,10 @@ export class CursorAdapter implements AgentAdapter {
   }
 
   async run(repoPath: string, prompt: string, mode: AgentMode = "scan"): Promise<RunResult> {
+    return withCliLock(() => this.execute(repoPath, prompt, mode));
+  }
+
+  private async execute(repoPath: string, prompt: string, mode: AgentMode): Promise<RunResult> {
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
 
