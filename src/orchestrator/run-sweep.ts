@@ -188,6 +188,8 @@ async function executeLayer(
   // 4. Regression check — flag regressions in all previous layers, don't revert
   const regressions: SweepRegression[] = [];
   if (prevLayers.length > 0 && mergedBranches.length > 0) {
+    const prevTaskNames = prevLayers.map((p) => p.layer.tasks.join(",")).join(", ");
+    options.onScanProgress?.({ agent: "sweep", status: "started", task: `regression-check:${prevTaskNames}` });
     for (const prev of prevLayers) {
       const regression = await checkRegressions(
         sweepWorktreePath, prev.layer, prev.criticalHigh, options,
@@ -262,6 +264,7 @@ async function runTwoPassSweep(
     log("info", "Two-pass sweep: starting Pass 1 (speed run)", {
       layers: reversedLayers.map((l) => l.layer),
     });
+    options.onScanProgress?.({ agent: "sweep", status: "started", task: "pass-1" });
 
     for (let i = 0; i < reversedLayers.length; i++) {
       const layer = reversedLayers[i]!;
@@ -307,6 +310,7 @@ async function runTwoPassSweep(
     log("info", "Two-pass sweep: starting Pass 2 (security + qa)", {
       layers: pass2Layers.map((l) => l.layer),
     });
+    options.onScanProgress?.({ agent: "sweep", status: "started", task: "pass-2" });
 
     for (let i = 0; i < pass2Layers.length; i++) {
       const layer = pass2Layers[i]!;
@@ -343,6 +347,7 @@ async function runTwoPassSweep(
     // Exit condition: check critical/high remaining in security + qa
     let criticalHighRemaining = 0;
     try {
+      options.onScanProgress?.({ agent: "sweep", status: "started", task: "exit-condition-check" });
       const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
       const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
       criticalHighRemaining = countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
@@ -469,6 +474,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       // Skip on the final round — no point checking when there's no next round to skip.
       if (round < maxRounds) {
         try {
+          options.onScanProgress?.({ agent: "sweep", status: "started", task: "exit-condition-check" });
           const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
           const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
           const remainingCriticalHigh =
@@ -495,6 +501,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
   // Skipped by default — this is an expensive full re-scan across all layers. Enable with --final-scan.
   const remaining: SweepRemaining[] = [];
   if (options.finalScan) {
+    options.onScanProgress?.({ agent: "sweep", status: "started", task: "final-scan" });
     for (const layer of SWEEP_LAYERS) {
       const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
       const unfixed = await filterFixed(clusters, absRepoPath);

@@ -116,11 +116,24 @@ export const sweepCommand = new Command("sweep")
     };
 
     const onScanProgress = (p: ScanProgress): void => {
-      // Baseline re-scan status message
-      if (p.agent === "sweep" && p.task?.startsWith("baseline-rescan:")) {
-        const tasks = p.task.slice("baseline-rescan:".length);
+      // Sweep phase transition messages
+      if (p.agent === "sweep") {
         if (isTTY) {
-          process.stderr.write(`  Re-scanning ${tasks} for regression baseline...\n`);
+          if (p.task === "pass-1") {
+            process.stderr.write(`\n${color("── Pass 1: speed run (all layers, no regression checks) ──", "\x1b[1m")}\n`);
+          } else if (p.task === "pass-2") {
+            process.stderr.write(`\n${color("── Pass 2: thorough (security + qa, with regression checks) ──", "\x1b[1m")}\n`);
+          } else if (p.task?.startsWith("regression-check:")) {
+            const tasks = p.task.slice("regression-check:".length);
+            process.stderr.write(`  Checking for regressions in ${tasks}...\n`);
+          } else if (p.task?.startsWith("baseline-rescan:")) {
+            const tasks = p.task.slice("baseline-rescan:".length);
+            process.stderr.write(`  Re-scanning ${tasks} for regression baseline...\n`);
+          } else if (p.task === "exit-condition-check") {
+            process.stderr.write(`  Checking exit condition (security + qa)...\n`);
+          } else if (p.task === "final-scan") {
+            process.stderr.write(`\n  Running final scan for remaining findings...\n`);
+          }
         }
         return;
       }
