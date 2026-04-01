@@ -28,4 +28,9 @@ export const AGENT_CONFIGS: Record<string, AgentConfig> = {
     command: "gemini",
     timeoutMs: DEFAULT_TIMEOUT_MS,
   },
+  opencode: {
+    name: "opencode",
+    command: "opencode",
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+  },
 };

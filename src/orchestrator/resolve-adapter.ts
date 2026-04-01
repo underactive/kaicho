@@ -4,6 +4,7 @@ import {
   CodexAdapter,
   CursorAdapter,
   GeminiAdapter,
+  OpenCodeAdapter,
 } from "../agent-adapters/index.js";
 import { AGENT_CONFIGS, parseAgentSpec } from "../config/index.js";
 
@@ -35,6 +36,8 @@ export function resolveAdapter(agent: string, timeoutMs?: number, model?: string
       return new CursorAdapter(opts);
     case "gemini":
       return new GeminiAdapter(opts);
+    case "opencode":
+      return new OpenCodeAdapter(opts);
     default:
       throw new Error(
         `Unknown agent: ${spec.base}. Available: ${ALL_AGENT_NAMES.join(", ")}`,

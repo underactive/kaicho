@@ -23,6 +23,7 @@ vi.mock("../agent-adapters/index.js", () => {
     CodexAdapter: vi.fn().mockImplementation(() => makeAdapter("codex")),
     CursorAdapter: vi.fn().mockImplementation(() => makeAdapter("cursor")),
     GeminiAdapter: vi.fn().mockImplementation(() => makeAdapter("gemini")),
+    OpenCodeAdapter: vi.fn().mockImplementation(() => makeAdapter("opencode")),
   };
 });
 
@@ -69,8 +70,8 @@ describe("runScan", () => {
       repoPath: "/test/repo",
     });
 
-    expect(result.results).toHaveLength(4);
-    expect(result.results.map((r) => r.agent)).toEqual(["claude", "codex", "cursor", "gemini"]);
+    expect(result.results).toHaveLength(5);
+    expect(result.results.map((r) => r.agent)).toEqual(["claude", "codex", "cursor", "gemini", "opencode"]);
   });
 
   it("runs specific agents when --agents specified", async () => {
@@ -91,10 +92,11 @@ describe("runScan", () => {
       repoPath: "/test/repo",
     });
 
-    expect(result.results).toHaveLength(2);
+    expect(result.results).toHaveLength(3);
     const agents = result.results.map((r) => r.agent);
     expect(agents).toContain("codex");
     expect(agents).toContain("cursor");
+    expect(agents).toContain("opencode");
     expect(agents).not.toContain("claude");
   });
 
@@ -118,9 +120,9 @@ describe("runScan", () => {
       repoPath: "/test/repo",
     });
 
-    // All 4 agents return a suggestion on test.ts:1, should cluster to 1
+    // All 5 agents return a suggestion on test.ts:1, should cluster to 1
     expect(result.clusters.length).toBeGreaterThanOrEqual(1);
-    expect(result.totalSuggestions).toBe(4);
+    expect(result.totalSuggestions).toBe(5);
   });
 
   it("fires progress callbacks", async () => {
@@ -134,8 +136,8 @@ describe("runScan", () => {
 
     const started = events.filter((e) => e.status === "started");
     const done = events.filter((e) => e.status === "done");
-    expect(started).toHaveLength(4);
-    expect(done).toHaveLength(4);
+    expect(started).toHaveLength(5);
+    expect(done).toHaveLength(5);
   });
 
   it("runs same-base variants sequentially", async () => {
