@@ -138,6 +138,42 @@ describe("runScan", () => {
     expect(done).toHaveLength(4);
   });
 
+  it("runs same-base variants sequentially", async () => {
+    const callOrder: string[] = [];
+    const { CursorAdapter } = await import("../agent-adapters/index.js");
+    vi.mocked(CursorAdapter).mockImplementation((opts) => ({
+      config: { name: (opts as { name?: string })?.name ?? "cursor", command: "agent", timeoutMs: 300000 },
+      isAvailable: vi.fn().mockResolvedValue(true),
+      run: vi.fn().mockImplementation(async () => {
+        const name = (opts as { name?: string })?.name ?? "cursor";
+        callOrder.push(`${name}:start`);
+        await new Promise((r) => setTimeout(r, 10));
+        callOrder.push(`${name}:end`);
+        return {
+          agent: name,
+          status: "success",
+          suggestions: [],
+          rawOutput: "",
+          rawError: "",
+          durationMs: 10,
+          startedAt: new Date().toISOString(),
+        };
+      }),
+    }) as never);
+
+    await runScan({
+      agents: ["cursor:comp", "cursor:gm"],
+      task: "security",
+      repoPath: "/test/repo",
+    });
+
+    // Sequential: comp must finish before gm starts
+    expect(callOrder).toEqual([
+      "cursor:comp:start", "cursor:comp:end",
+      "cursor:gm:start", "cursor:gm:end",
+    ]);
+  });
+
   it("skips unavailable agents", async () => {
     const { ClaudeAdapter } = await import("../agent-adapters/index.js");
     vi.mocked(ClaudeAdapter).mockImplementation(() => ({

@@ -186,16 +186,36 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
 
   const startMs = Date.now();
 
-  // Run all agents in parallel
+  // Group agents by base CLI command so same-CLI variants run sequentially
+  // (avoids file-lock races, e.g. two Cursor instances writing cli-config.json).
+  // Different CLI groups still run in parallel.
+  const groups = new Map<string, string[]>();
+  for (const a of agentsToRun) {
+    const base = getBase(a);
+    const group = groups.get(base) ?? [];
+    group.push(a);
+    groups.set(base, group);
+  }
+
+  const runGroup = async (agents: string[]): Promise<RunResult[]> => {
+    const groupResults: RunResult[] = [];
+    for (const a of agents) {
+      groupResults.push(
+        await runSingleAgent(a, prompt, absRepoPath, timeoutMs, resolveModel(a, options.models), options.onProgress),
+      );
+    }
+    return groupResults;
+  };
+
   const settled = await Promise.allSettled(
-    agentsToRun.map((a) => runSingleAgent(a, prompt, absRepoPath, timeoutMs, resolveModel(a, options.models), options.onProgress)),
+    [...groups.values()].map((group) => runGroup(group)),
   );
 
-  const results: RunResult[] = settled.map((s, i) => {
+  const results: RunResult[] = settled.flatMap((s) => {
     if (s.status === "fulfilled") return s.value;
     // Promise.allSettled rejection — should not happen since adapters never throw
-    return {
-      agent: agentsToRun[i] ?? "unknown",
+    return [{
+      agent: "unknown",
       status: "agent-error" as const,
       suggestions: [],
       rawOutput: "",
@@ -203,7 +223,7 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
       durationMs: Date.now() - startMs,
       startedAt: new Date().toISOString(),
       error: `Unexpected rejection: ${String(s.reason)}`,
-    };
+    }];
   });
 
   // Save each result
