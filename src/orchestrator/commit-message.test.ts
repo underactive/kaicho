@@ -27,12 +27,23 @@ describe("buildCommitMessage", () => {
       makeCluster({ summary: "SQL injection in query builder" }),
       "claude",
     );
-    expect(msg).toMatch(/^fix\(a1b2c3\): SQL injection in query builder/);
+    expect(msg).toMatch(/^fix: SQL injection in query builder/);
   });
 
   it("truncates first rationale as title when no summary", () => {
     const msg = buildCommitMessage(makeCluster(), "claude");
-    expect(msg).toMatch(/^fix\(a1b2c3\): SQL injection via string concatenation/);
+    expect(msg).toMatch(/^fix: SQL injection via string concatenation/);
+  });
+
+  it("does not include cluster ID in subject line", () => {
+    const msg = buildCommitMessage(makeCluster(), "claude");
+    const title = msg.split("\n")[0]!;
+    expect(title).not.toContain("a1b2c3");
+  });
+
+  it("includes Kaichō ref in description header", () => {
+    const msg = buildCommitMessage(makeCluster(), "claude");
+    expect(msg).toContain("Kaichō ref: a1b2c3");
   });
 
   it("truncates long titles to 72 chars", () => {
@@ -42,8 +53,8 @@ describe("buildCommitMessage", () => {
       "claude",
     );
     const title = msg.split("\n")[0]!;
-    // fix(a1b2c3): + 72 chars max for the rationale part
-    expect(title.length).toBeLessThanOrEqual(85);
+    // fix: + 72 chars max for the rationale part
+    expect(title.length).toBeLessThanOrEqual(78);
     expect(title).toContain("…");
   });
 

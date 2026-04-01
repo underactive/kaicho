@@ -4,8 +4,9 @@ import type { SuggestionCluster } from "../dedup/index.js";
  * Build a descriptive commit message from a SuggestionCluster.
  *
  * Format:
- *   fix(<id>): <summary or first rationale truncated>
+ *   fix: <summary or first rationale truncated>
  *
+ *   Kaichō ref: <id>
  *   File: <file>:<line>
  *   Severity: <severity> | Category: <category>
  *   Found by: <agents>
@@ -45,8 +46,9 @@ export function buildCommitMessage(
   const foundBy = `${agentList}${agreement}`;
 
   const lines: string[] = [
-    `fix(${cluster.id}): ${title}`,
+    `fix: ${title}`,
     "",
+    `Kaichō ref: ${cluster.id}`,
     `File: ${location}`,
     `Severity: ${cluster.severity} | Category: ${cluster.category}`,
     `Found by: ${foundBy}`,
