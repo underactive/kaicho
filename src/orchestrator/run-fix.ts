@@ -162,6 +162,11 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
       agent: agentName,
       branch,
       fixedAt: new Date().toISOString(),
+      line: cluster.line,
+      severity: cluster.severity,
+      category: cluster.category,
+      rationale: cluster.rationales[0]?.rationale,
+      diff,
     });
 
     notify({ step: "done", agent: agentName, branch, detail: `${filesChanged} file${filesChanged === 1 ? "" : "s"} changed` });

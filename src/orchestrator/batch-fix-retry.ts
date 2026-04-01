@@ -83,6 +83,11 @@ export async function executeRetry(ctx: RetryContext): Promise<RetryOutcome> {
     agent: ctx.reviewer,
     branch: ctx.branch,
     fixedAt: new Date().toISOString(),
+    line: ctx.cluster.line,
+    severity: ctx.cluster.severity,
+    category: ctx.cluster.category,
+    rationale: ctx.cluster.rationales[0]?.rationale,
+    diff: retryDiff.diff,
   });
 
   const item: BatchFixItemResult = {

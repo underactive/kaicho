@@ -232,6 +232,11 @@ export async function runBatchFix(options: BatchFixOptions): Promise<BatchFixRes
         agent: agentName,
         branch,
         fixedAt: new Date().toISOString(),
+        line: cluster.line,
+        severity: cluster.severity,
+        category: cluster.category,
+        rationale: cluster.rationales[0]?.rationale,
+        diff,
       });
 
       notify({

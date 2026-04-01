@@ -17,7 +17,7 @@ import {
   cleanupWorktreeBase,
 } from "../branch/index.js";
 import { runValidation, type ValidateResult } from "./run-validate.js";
-import { recordFix, recordDiscardedFix } from "../fix-log/index.js";
+import { recordFix, recordDiscardedFix, type FixLogEntry } from "../fix-log/index.js";
 import { fingerprint, formatContextForFile, type RepoContext } from "../repo-context/index.js";
 import { log } from "../logger/index.js";
 
@@ -94,6 +94,24 @@ export interface ParallelFixOptions {
 }
 
 import type { DiscardedFixEntry } from "../fix-log/index.js";
+
+function buildFixEntry(
+  item: ParallelFixItemResult,
+  cluster: SuggestionCluster,
+): FixLogEntry {
+  return {
+    clusterId: item.clusterId,
+    file: item.file,
+    agent: item.agent,
+    branch: item.branch,
+    fixedAt: new Date().toISOString(),
+    line: cluster.line,
+    severity: cluster.severity,
+    category: cluster.category,
+    rationale: cluster.rationales[0]?.rationale,
+    diff: item.diff,
+  };
+}
 
 function buildDiscardedEntry(
   item: ParallelFixItemResult,
@@ -292,11 +310,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, true);
           totalDiscarded++;
         } else {
-          await recordFix(fixLogRoot, {
-            clusterId: item.clusterId, file: item.file,
-            agent: item.agent, branch: item.branch,
-            fixedAt: new Date().toISOString(),
-          });
+          await recordFix(fixLogRoot, buildFixEntry(item, clusters[orderMap.get(item.clusterId)!]!));
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, false);
           keptBranches.push(item.branch);
           totalKept++;
@@ -305,11 +319,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
         const action = await options.onConfirm(item, clusters[orderMap.get(item.clusterId)!]!, i + 1, results.length);
 
         if (action === "keep") {
-          await recordFix(fixLogRoot, {
-            clusterId: item.clusterId, file: item.file,
-            agent: item.agent, branch: item.branch,
-            fixedAt: new Date().toISOString(),
-          });
+          await recordFix(fixLogRoot, buildFixEntry(item, clusters[orderMap.get(item.clusterId)!]!));
           await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, false);
           keptBranches.push(item.branch);
           totalKept++;
@@ -343,11 +353,7 @@ export async function runParallelFix(options: ParallelFixOptions): Promise<Paral
             if (options.onConfirm) {
               const retryAction = await options.onConfirm(retryItem, cluster, i + 1, results.length);
               if (retryAction === "keep") {
-                await recordFix(fixLogRoot, {
-                  clusterId: retryItem.clusterId, file: retryItem.file,
-                  agent: retryItem.agent, branch: retryItem.branch,
-                  fixedAt: new Date().toISOString(),
-                });
+                await recordFix(fixLogRoot, buildFixEntry(retryItem, cluster));
                 await removeFixWorktree(absRepoPath, item.worktreePath, item.branch, false);
                 keptBranches.push(item.branch);
                 totalKept++;

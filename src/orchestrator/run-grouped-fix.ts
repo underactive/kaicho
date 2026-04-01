@@ -269,6 +269,8 @@ export async function runGroupedFix(
           await recordFix(fixLogRoot, {
             clusterId: c.id, file: c.file, agent: agentName, branch,
             fixedAt: new Date().toISOString(),
+            line: c.line, severity: c.severity, category: c.category,
+            rationale: c.rationales[0]?.rationale, diff,
           });
         }
         await removeFixWorktree(absRepoPath, worktreePath, branch, false);
@@ -283,6 +285,8 @@ export async function runGroupedFix(
           await recordFix(fixLogRoot, {
             clusterId: c.id, file: c.file, agent: agentName, branch,
             fixedAt: new Date().toISOString(),
+            line: c.line, severity: c.severity, category: c.category,
+            rationale: c.rationales[0]?.rationale, diff,
           });
         }
         await removeFixWorktree(absRepoPath, worktreePath, branch, false);

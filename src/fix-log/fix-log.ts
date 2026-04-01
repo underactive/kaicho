@@ -13,6 +13,12 @@ export interface FixLogEntry {
   agent: string;
   branch: string;
   fixedAt: string;
+  /** Added in v0.2 — optional for backward compat with older fixed.json */
+  line?: number | null;
+  severity?: string;
+  category?: string;
+  rationale?: string;
+  diff?: string;
 }
 
 interface FixLogData {

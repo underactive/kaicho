@@ -9,6 +9,7 @@ import { listCommand } from "./commands/list.js";
 import { reportCommand } from "./commands/report.js";
 import { scanCommand } from "./commands/scan.js";
 import { sweepCommand } from "./commands/sweep.js";
+import { uiCommand } from "./commands/ui.js";
 
 const program = new Command();
 
@@ -25,5 +26,6 @@ program.addCommand(listCommand);
 program.addCommand(reportCommand);
 program.addCommand(scanCommand);
 program.addCommand(sweepCommand);
+program.addCommand(uiCommand);
 
 program.parse();

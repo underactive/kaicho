@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Run AI coding agents against repos and collect structured suggestions",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },
@@ -10,7 +13,8 @@
     "kaicho": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build -w @kaicho/dashboard && tsc",
+    "build:cli": "tsc",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "test": "vitest run",
@@ -19,6 +23,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@kaicho/dashboard": "workspace:*",
     "commander": "^13.0.0",
     "execa": "^9.5.0",
     "zod": "^3.24.0"
