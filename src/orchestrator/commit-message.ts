@@ -96,7 +96,7 @@ export function buildGroupCommitMessage(
   const headerDivider = "-".repeat(Math.max(...headerLines.map((l) => l.length)));
 
   const lines: string[] = [
-    `fix: fix ${clusters.length} issues in ${file}`,
+    `fix: ${clusters.length} issues in ${file}`,
     "",
     ...headerLines,
     "",

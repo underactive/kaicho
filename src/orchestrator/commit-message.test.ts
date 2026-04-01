@@ -185,7 +185,7 @@ describe("buildGroupCommitMessage", () => {
   it("uses clean subject without cluster IDs", () => {
     const msg = buildGroupCommitMessage(makeGroupClusters(), "claude");
     const title = msg.split("\n")[0]!;
-    expect(title).toBe("fix: fix 2 issues in supabase/functions/verify-password/index.ts");
+    expect(title).toBe("fix: 2 issues in supabase/functions/verify-password/index.ts");
     expect(title).not.toContain("dbbc4a");
     expect(title).not.toContain("44cd9a");
   });
