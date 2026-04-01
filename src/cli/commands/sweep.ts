@@ -116,6 +116,15 @@ export const sweepCommand = new Command("sweep")
     };
 
     const onScanProgress = (p: ScanProgress): void => {
+      // Baseline re-scan status message
+      if (p.agent === "sweep" && p.task?.startsWith("baseline-rescan:")) {
+        const tasks = p.task.slice("baseline-rescan:".length);
+        if (isTTY) {
+          process.stderr.write(`  Re-scanning ${tasks} for regression baseline...\n`);
+        }
+        return;
+      }
+
       const task = p.task ? ` [${p.task}]` : "";
       if (isTTY) {
         if (p.status === "started") {

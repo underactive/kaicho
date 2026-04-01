@@ -207,10 +207,16 @@ async function executeLayer(
   }
 
   // Count post-fix critical/high for this layer (for next layer's regression baseline).
-  // Skip the re-scan if no fixes were merged — code hasn't changed.
-  const criticalHigh = mergedBranches.length > 0
-    ? countCriticalHigh((await scanLayer(layer, sweepWorktreePath, options)).clusters)
-    : countCriticalHigh(clusters);
+  // Skip the re-scan if no fixes were merged (code hasn't changed) or if no
+  // previous layers will use the baseline (e.g. Pass 1 of two-pass has no regression checks).
+  let criticalHigh: number;
+  if (mergedBranches.length > 0 && prevLayers.length > 0) {
+    log("info", "Re-scanning layer for regression baseline", { layer: layer.layer, tasks: layer.tasks });
+    options.onScanProgress?.({ agent: "sweep", status: "started", task: `baseline-rescan:${layer.tasks.join(",")}` });
+    criticalHigh = countCriticalHigh((await scanLayer(layer, sweepWorktreePath, options)).clusters);
+  } else {
+    criticalHigh = countCriticalHigh(clusters);
+  }
 
   const result: SweepLayerResult = {
     layer: layer.layer,
