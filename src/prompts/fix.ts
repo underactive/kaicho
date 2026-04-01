@@ -26,6 +26,46 @@ export function extractFixerContext(rawOutput: string): string | null {
 }
 
 /**
+ * Extract manual action items from a fixer agent's raw output.
+ * Parses `<MANUAL_ACTIONS>` block containing bulleted list items.
+ */
+export function extractManualActions(rawOutput: string): string[] {
+  const extract = (text: string): string[] => {
+    const match = text.match(/<MANUAL_ACTIONS>([\s\S]*?)<\/MANUAL_ACTIONS>/);
+    if (!match?.[1]?.trim()) return [];
+    return match[1]
+      .split("\n")
+      .map((line) => line.replace(/^\s*[-*]\s*/, "").trim())
+      .filter(Boolean);
+  };
+
+  // Try JSON wrapper first — direct extraction on raw JSON strings would match
+  // against escaped \n characters, producing garbled results.
+  try {
+    const wrapper = JSON.parse(rawOutput) as Record<string, unknown>;
+    for (const key of ["result", "response", "structured_output"]) {
+      const val = wrapper[key];
+      const text = typeof val === "string" ? val : typeof val === "object" ? JSON.stringify(val) : null;
+      if (!text) continue;
+      const inner = extract(text);
+      if (inner.length > 0) return inner;
+    }
+  } catch {
+    // Not JSON — fall through to direct extraction
+  }
+
+  return extract(rawOutput);
+}
+
+const MANUAL_ACTIONS_INSTRUCTION = `
+If your fix requires the user to take any manual steps outside the codebase (such as adding environment variables, rotating secrets, updating deployment configs, or configuring external services), list them:
+<MANUAL_ACTIONS>
+- [action 1]
+- [action 2]
+</MANUAL_ACTIONS>
+Omit the MANUAL_ACTIONS block entirely if no manual steps are needed.`;
+
+/**
  * Build a prompt that instructs an agent to apply a fix for a specific
  * suggestion cluster. The agent will have write access to the repo.
  */
@@ -70,7 +110,8 @@ After applying the fix, output a context block in this exact format:
 Approach: [what you changed and why this approach]
 Alternatives rejected: [other approaches you considered but did not use, with reasons]
 Tradeoffs: [any limitations, downsides, or scope boundaries of this fix]
-</FIX_CONTEXT>`;
+</FIX_CONTEXT>
+${MANUAL_ACTIONS_INSTRUCTION}`;
 }
 
 /**
@@ -133,7 +174,8 @@ After applying all fixes, output a context block in this exact format:
 Approach: [what you changed for each issue and why]
 Alternatives rejected: [other approaches you considered but did not use, with reasons]
 Tradeoffs: [any limitations, downsides, or scope boundaries of these fixes]
-</FIX_CONTEXT>`;
+</FIX_CONTEXT>
+${MANUAL_ACTIONS_INSTRUCTION}`;
 }
 
 /**
@@ -196,5 +238,6 @@ After applying the fix, output a context block in this exact format:
 Approach: [what you changed and why this approach]
 Alternatives rejected: [other approaches you considered but did not use, with reasons]
 Tradeoffs: [any limitations, downsides, or scope boundaries of this fix]
-</FIX_CONTEXT>`;
+</FIX_CONTEXT>
+${MANUAL_ACTIONS_INSTRUCTION}`;
 }

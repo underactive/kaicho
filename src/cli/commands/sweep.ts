@@ -208,6 +208,13 @@ export const sweepCommand = new Command("sweep")
       if (totalReg > 0) {
         process.stderr.write(`  ${color("Regressions flagged — review before merging: .kaicho/sweep-regressions.json", "\x1b[33m")}\n`);
       }
+      if (report.manualActions.length > 0) {
+        process.stderr.write(`\n  ${color("Manual actions required:", "\x1b[33m")}\n`);
+        for (const a of report.manualActions) {
+          process.stderr.write(`    ${color("!", "\x1b[33m")} ${a.action}\n`);
+          process.stderr.write(`      ${color(`${a.file} — ${a.category}/${a.severity} [${a.clusterId}]`, "\x1b[90m")}\n`);
+        }
+      }
       process.stderr.write(`  Branch: ${report.sweepBranch} (not checked out)\n`);
       process.stderr.write(`  Log: ${path.relative(repoPath, logPath)}\n`);
     } else {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFixPrompt, buildMultiFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
+import { buildFixPrompt, buildMultiFixPrompt, buildRetryFixPrompt, extractFixerContext, extractManualActions } from "./fix.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
 function makeCluster(overrides: Partial<SuggestionCluster> = {}): SuggestionCluster {
@@ -172,6 +172,27 @@ describe("buildMultiFixPrompt", () => {
   });
 });
 
+describe("MANUAL_ACTIONS instruction in prompts", () => {
+  it("buildFixPrompt includes MANUAL_ACTIONS instruction", () => {
+    const prompt = buildFixPrompt(makeCluster());
+    expect(prompt).toContain("<MANUAL_ACTIONS>");
+    expect(prompt).toContain("</MANUAL_ACTIONS>");
+    expect(prompt).toContain("Omit the MANUAL_ACTIONS block entirely");
+  });
+
+  it("buildMultiFixPrompt includes MANUAL_ACTIONS instruction", () => {
+    const prompt = buildMultiFixPrompt([makeCluster()]);
+    expect(prompt).toContain("<MANUAL_ACTIONS>");
+    expect(prompt).toContain("Omit the MANUAL_ACTIONS block entirely");
+  });
+
+  it("buildRetryFixPrompt includes MANUAL_ACTIONS instruction", () => {
+    const prompt = buildRetryFixPrompt(makeCluster(), "diff", "concern");
+    expect(prompt).toContain("<MANUAL_ACTIONS>");
+    expect(prompt).toContain("Omit the MANUAL_ACTIONS block entirely");
+  });
+});
+
 describe("extractFixerContext", () => {
   it("extracts from plain text", () => {
     const output = `I fixed the SQL injection.\n<FIX_CONTEXT>\nApproach: Used parameterized queries\nAlternatives rejected: ORM was overkill\nTradeoffs: Slightly more verbose\n</FIX_CONTEXT>`;
@@ -200,5 +221,70 @@ describe("extractFixerContext", () => {
   it("returns null when no context block", () => {
     expect(extractFixerContext("just some output")).toBeNull();
     expect(extractFixerContext(JSON.stringify({ result: "no context here" }))).toBeNull();
+  });
+});
+
+describe("extractManualActions", () => {
+  it("extracts from plain text with dash bullets", () => {
+    const output = `Done.\n<MANUAL_ACTIONS>\n- Add SHARED_SECRET env var to production\n- Rotate database credentials\n</MANUAL_ACTIONS>`;
+    const actions = extractManualActions(output);
+    expect(actions).toEqual([
+      "Add SHARED_SECRET env var to production",
+      "Rotate database credentials",
+    ]);
+  });
+
+  it("extracts from plain text with asterisk bullets", () => {
+    const output = `<MANUAL_ACTIONS>\n* Configure Redis connection string\n* Update Nginx proxy config\n</MANUAL_ACTIONS>`;
+    const actions = extractManualActions(output);
+    expect(actions).toEqual([
+      "Configure Redis connection string",
+      "Update Nginx proxy config",
+    ]);
+  });
+
+  it("extracts from Claude JSON wrapper", () => {
+    const output = JSON.stringify({
+      type: "result",
+      result: "Fixed.\n<MANUAL_ACTIONS>\n- Set API_KEY in .env\n</MANUAL_ACTIONS>",
+    });
+    const actions = extractManualActions(output);
+    expect(actions).toEqual(["Set API_KEY in .env"]);
+  });
+
+  it("extracts from Gemini JSON wrapper", () => {
+    const output = JSON.stringify({
+      response: "Done.\n<MANUAL_ACTIONS>\n- Add webhook URL to Stripe dashboard\n</MANUAL_ACTIONS>",
+    });
+    const actions = extractManualActions(output);
+    expect(actions).toEqual(["Add webhook URL to Stripe dashboard"]);
+  });
+
+  it("returns empty array when no block present", () => {
+    expect(extractManualActions("just some output")).toEqual([]);
+    expect(extractManualActions(JSON.stringify({ result: "no actions" }))).toEqual([]);
+  });
+
+  it("returns empty array for empty block", () => {
+    expect(extractManualActions("<MANUAL_ACTIONS>\n\n</MANUAL_ACTIONS>")).toEqual([]);
+    expect(extractManualActions("<MANUAL_ACTIONS>   </MANUAL_ACTIONS>")).toEqual([]);
+  });
+
+  it("tolerates extra whitespace", () => {
+    const output = `<MANUAL_ACTIONS>\n  - Add SECRET_KEY env var  \n  -  Update deploy config \n</MANUAL_ACTIONS>`;
+    const actions = extractManualActions(output);
+    expect(actions).toEqual([
+      "Add SECRET_KEY env var",
+      "Update deploy config",
+    ]);
+  });
+
+  it("coexists with FIX_CONTEXT block", () => {
+    const output = `<FIX_CONTEXT>\nApproach: Added secret rotation\nAlternatives rejected: None\nTradeoffs: None\n</FIX_CONTEXT>\n<MANUAL_ACTIONS>\n- Rotate the old secret\n</MANUAL_ACTIONS>`;
+    const actions = extractManualActions(output);
+    expect(actions).toEqual(["Rotate the old secret"]);
+    // FIX_CONTEXT should still be extractable
+    const ctx = extractFixerContext(output);
+    expect(ctx).toContain("Added secret rotation");
   });
 });

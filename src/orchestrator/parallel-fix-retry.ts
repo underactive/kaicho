@@ -1,6 +1,6 @@
 import type { AgentAdapter } from "../types/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
-import { buildRetryFixPrompt, extractFixerContext } from "../prompts/index.js";
+import { buildRetryFixPrompt, extractFixerContext, extractManualActions } from "../prompts/index.js";
 import { buildCommitMessage } from "./commit-message.js";
 import { captureDiff, commitFix, resetLastCommit } from "../branch/index.js";
 import { log } from "../logger/index.js";
@@ -73,6 +73,7 @@ export async function executeParallelRetry(ctx: ParallelRetryContext): Promise<P
       filesChanged: retryDiff.filesChanged,
       diff: retryDiff.diff,
       fixerContext: extractFixerContext(result.rawOutput) ?? undefined,
+      manualActions: extractManualActions(result.rawOutput),
     },
     applied: true,
   };

@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SuggestionCluster } from "../dedup/index.js";
-import { buildFixPrompt, extractFixerContext } from "../prompts/index.js";
+import { buildFixPrompt, extractFixerContext, extractManualActions } from "../prompts/index.js";
 import { buildCommitMessage } from "./commit-message.js";
 import { resolveAdapter } from "./resolve-adapter.js";
 import {
@@ -44,6 +44,7 @@ export interface FixResult {
   durationMs: number;
   error?: string;
   fixerContext?: string;
+  manualActions?: string[];
 }
 
 /**
@@ -180,6 +181,7 @@ export async function runFix(options: FixOptions): Promise<FixResult> {
       filesChanged,
       durationMs: Date.now() - startMs,
       fixerContext: extractFixerContext(result.rawOutput) ?? undefined,
+      manualActions: extractManualActions(result.rawOutput),
     };
   } catch (err) {
     // Best-effort cleanup

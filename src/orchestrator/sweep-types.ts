@@ -59,6 +59,7 @@ export interface SweepLayerResult {
   failed: number;
   keptBranches: string[];
   regressions: SweepRegression[];
+  manualActions: ManualAction[];
   durationMs: number;
 }
 
@@ -93,6 +94,7 @@ export interface SweepReport {
   strategy?: "single-pass" | "two-pass";
   rounds: SweepRoundResult[];
   remaining: SweepRemaining[];
+  manualActions: ManualAction[];
 }
 
 export interface SweepRemaining {
@@ -116,6 +118,18 @@ export interface SweepRegressionReport {
     newCriticalHighCount: number;
     details: string;
   }>;
+}
+
+// --- Manual actions ---
+
+export interface ManualAction {
+  action: string;
+  clusterId: string;
+  file: string;
+  category: string;
+  severity: string;
+  agent: string;
+  branch: string;
 }
 
 // --- Helpers ---

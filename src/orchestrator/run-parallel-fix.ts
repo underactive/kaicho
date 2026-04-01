@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SuggestionCluster } from "../dedup/index.js";
-import { buildFixPrompt, extractFixerContext } from "../prompts/index.js";
+import { buildFixPrompt, extractFixerContext, extractManualActions } from "../prompts/index.js";
 import { buildCommitMessage } from "./commit-message.js";
 import { resolveAdapter } from "./resolve-adapter.js";
 import { resolveModel } from "../config/index.js";
@@ -34,6 +34,7 @@ export interface ParallelFixItemResult {
   error?: string;
   retryOf?: string;
   fixerContext?: string;
+  manualActions?: string[];
   validation?: ValidateResult;
 }
 
@@ -205,6 +206,7 @@ async function executeFixInWorktree(
     }
 
     const fixerContext = extractFixerContext(result.rawOutput) ?? undefined;
+    const manualActions = extractManualActions(result.rawOutput);
 
     // Run validation in parallel with other fixes (reviewer reads from worktree)
     let validation: ValidateResult | undefined;
@@ -233,7 +235,7 @@ async function executeFixInWorktree(
     n("applied", { agent: agentName, branch, filesChanged });
 
     return makeResult(cluster, agentName, branch, worktreePath, fixStartMs, {
-      status: "applied", filesChanged, diff, fixerContext, validation,
+      status: "applied", filesChanged, diff, fixerContext, manualActions, validation,
     });
   } catch (err) {
     await removeFixWorktree(absRepoPath, worktreePath, branch, true).catch(() => {});

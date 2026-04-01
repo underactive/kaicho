@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SuggestionCluster } from "../dedup/index.js";
-import { buildMultiFixPrompt, extractFixerContext } from "../prompts/index.js";
+import { buildMultiFixPrompt, extractFixerContext, extractManualActions } from "../prompts/index.js";
 import { buildGroupCommitMessage } from "./commit-message.js";
 import { resolveAdapter } from "./resolve-adapter.js";
 import { resolveModel } from "../config/index.js";
@@ -217,6 +217,7 @@ export async function runGroupedFix(
     }
 
     const fixerContext = extractFixerContext(result.rawOutput) ?? undefined;
+    const manualActions = extractManualActions(result.rawOutput);
 
     // Validate once with a synthetic cluster
     let validation: ValidateResult | undefined;
@@ -250,7 +251,7 @@ export async function runGroupedFix(
     const items: ParallelFixItemResult[] = clusters.map((c) => ({
       clusterId: c.id, file: c.file, agent: agentName, branch, worktreePath,
       status: "applied" as const, filesChanged, durationMs: Date.now() - startMs, diff,
-      fixerContext, validation,
+      fixerContext, manualActions, validation,
     }));
 
     // Confirmation — the group is kept or discarded as a unit

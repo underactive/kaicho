@@ -26,6 +26,7 @@ import {
   type SweepRemaining,
   type SweepRegressionReport,
   type SweepLayer,
+  type ManualAction,
 } from "./sweep-types.js";
 
 /**
@@ -159,6 +160,7 @@ async function executeLayer(
       failed: 0,
       keptBranches: [],
       regressions: [],
+      manualActions: [],
       durationMs: Date.now() - startMs,
     };
     return { result, criticalHigh: countCriticalHigh(clusters) };
@@ -220,6 +222,27 @@ async function executeLayer(
     criticalHigh = countCriticalHigh(clusters);
   }
 
+  // 5. Collect manual actions from kept fixes only
+  const keptBranchSet = new Set(mergedBranches);
+  const clusterMap = new Map(toFix.map((c) => [c.id, c]));
+  const manualActions: ManualAction[] = [];
+  for (const item of fixResult.items) {
+    if (item.status !== "applied" || !keptBranchSet.has(item.branch)) continue;
+    if (!item.manualActions?.length) continue;
+    const cluster = clusterMap.get(item.clusterId);
+    for (const action of item.manualActions) {
+      manualActions.push({
+        action,
+        clusterId: item.clusterId,
+        file: item.file,
+        category: cluster?.category ?? "unknown",
+        severity: cluster?.severity ?? "unknown",
+        agent: item.agent,
+        branch: item.branch,
+      });
+    }
+  }
+
   const result: SweepLayerResult = {
     layer: layer.layer,
     tasks: [...layer.tasks],
@@ -229,10 +252,23 @@ async function executeLayer(
     failed: fixResult.totalFailed,
     keptBranches: mergedBranches,
     regressions,
+    manualActions,
     durationMs: Date.now() - startMs,
   };
 
   return { result, criticalHigh };
+}
+
+/**
+ * Deduplicate manual actions by normalized action text, keeping the first occurrence.
+ */
+function deduplicateActions(actions: ManualAction[]): ManualAction[] {
+  const seen = new Map<string, ManualAction>();
+  for (const a of actions) {
+    const key = a.action.toLowerCase().trim();
+    if (!seen.has(key)) seen.set(key, a);
+  }
+  return [...seen.values()];
 }
 
 /**
@@ -248,6 +284,7 @@ async function runTwoPassSweep(
 ): Promise<{
   rounds: SweepRoundResult[];
   regressions: SweepRegressionReport["regressions"];
+  manualActions: ManualAction[];
   exitReason: SweepReport["exitReason"];
 }> {
   const rounds: SweepRoundResult[] = [];
@@ -373,7 +410,8 @@ async function runTwoPassSweep(
     }
   }
 
-  return { rounds, regressions: allRegressions, exitReason };
+  const allManualActions = rounds.flatMap((r) => r.layers.flatMap((l) => l.manualActions));
+  return { rounds, regressions: allRegressions, manualActions: allManualActions, exitReason };
 }
 
 /**
@@ -397,6 +435,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
 
   const rounds: SweepRoundResult[] = [];
   const allRegressions: SweepRegressionReport["regressions"] = [];
+  const allManualActions: ManualAction[] = [];
   let exitReason: SweepReport["exitReason"] = "max-rounds";
 
   try {
@@ -406,6 +445,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       );
       rounds.push(...twoPassResult.rounds);
       allRegressions.push(...twoPassResult.regressions);
+      allManualActions.push(...twoPassResult.manualActions);
       exitReason = twoPassResult.exitReason;
     } else for (let round = 1; round <= maxRounds; round++) {
       const roundStartMs = Date.now();
@@ -444,6 +484,8 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
               details: reg.details,
             });
           }
+
+          allManualActions.push(...result.manualActions);
 
           prevLayers.push({ layer, criticalHigh });
         } catch (err) {
@@ -531,6 +573,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     strategy: options.twoPass ? "two-pass" : "single-pass",
     rounds,
     remaining,
+    manualActions: deduplicateActions(allManualActions),
   };
 
   // Write reports to original repo (not the worktree)

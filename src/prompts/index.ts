@@ -11,5 +11,5 @@ export { buildDxScanPrompt } from "./dx-scan.js";
 export { buildPerformanceScanPrompt } from "./performance-scan.js";
 export { buildResilienceScanPrompt } from "./resilience-scan.js";
 export { buildLoggingScanPrompt } from "./logging-scan.js";
-export { buildFixPrompt, buildMultiFixPrompt, buildRetryFixPrompt, extractFixerContext } from "./fix.js";
+export { buildFixPrompt, buildMultiFixPrompt, buildRetryFixPrompt, extractFixerContext, extractManualActions } from "./fix.js";
 export { buildValidationPrompt, pickReviewer, type ValidationResult } from "./validate.js";
