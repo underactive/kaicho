@@ -177,7 +177,8 @@ export const sweepCommand = new Command("sweep")
         .map(([s, n]) => `${n} ${s}`)
         .join(", ") || "none";
 
-      process.stderr.write(`\n═══ Sweep complete ═══\n`);
+      const elapsedMs = new Date(report.completedAt).getTime() - new Date(report.startedAt).getTime();
+      process.stderr.write(`\n═══ Sweep complete (${formatElapsed(elapsedMs)}) ═══\n`);
       process.stderr.write(`  Rounds: ${report.totalRounds} of ${report.maxRounds} (exited: ${report.exitReason})\n`);
       process.stderr.write(`  Total fixed: ${totalFixed} | Regressions: ${totalReg}\n`);
       process.stderr.write(`  Remaining: ${report.remaining.length} (${sevStr})\n`);
