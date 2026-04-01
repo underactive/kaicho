@@ -9,7 +9,7 @@ export function scopeBlock(fileManifest?: string): string {
  * so that individual prompt builders don't need signature changes.
  */
 export function buildPromptPrelude(fileManifest?: string, repoContext?: string): string {
-  let prelude = "";
+  let prelude = "\n\nCRITICAL: You MUST respond with ONLY a JSON object. No prose, no markdown, no explanation outside the JSON.";
   if (repoContext) prelude += `\n\n${repoContext}`;
   if (fileManifest) prelude += `\n\nSCOPE: Only review the following files. Do not review files outside this list.\n${fileManifest}\n`;
   return prelude;

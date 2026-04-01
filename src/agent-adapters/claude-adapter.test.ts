@@ -157,6 +157,68 @@ describe("ClaudeAdapter", () => {
       expect(result.error).toContain("crash");
     });
 
+    it("retries with reformat when scan parse fails with prose", async () => {
+      const proseWrapper = {
+        type: "result",
+        result: "I analyzed the codebase and found a critical SQL injection in app.ts on line 10. The query concatenates user input directly.",
+      };
+      const reformatWrapper = {
+        type: "result",
+        result: JSON.stringify({
+          suggestions: [
+            {
+              file: "app.ts",
+              line: 10,
+              category: "security",
+              severity: "critical",
+              rationale: "SQL injection via string concatenation",
+              suggestedChange: "Use parameterized queries",
+            },
+          ],
+        }),
+      };
+
+      let callCount = 0;
+      mockExecaImpl(() => {
+        callCount++;
+        // First call: original scan returns prose
+        // Second call: reformat retry returns JSON
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: JSON.stringify(callCount === 1 ? proseWrapper : reformatWrapper),
+          stderr: "",
+          timedOut: false,
+        });
+      });
+
+      const adapter = new ClaudeAdapter();
+      const result = await adapter.run("/test/repo", "scan");
+
+      expect(callCount).toBe(2);
+      expect(result.status).toBe("success");
+      expect(result.suggestions).toHaveLength(1);
+      expect(result.suggestions[0]?.file).toBe("app.ts");
+    });
+
+    it("returns parse-error when reformat retry also fails", async () => {
+      const proseWrapper = {
+        type: "result",
+        result: "No security issues found in this codebase.",
+      };
+
+      mockExecaImpl(() => Promise.resolve({
+        exitCode: 0,
+        stdout: JSON.stringify(proseWrapper),
+        stderr: "",
+        timedOut: false,
+      }));
+
+      const adapter = new ClaudeAdapter();
+      const result = await adapter.run("/test/repo", "scan");
+
+      expect(result.status).toBe("parse-error");
+    });
+
     it("uses --permission-mode plan for read-only and does not pass --json-schema", async () => {
       let capturedArgs: string[] = [];
       mockExecaImpl((command: string, args?: string[]) => {
