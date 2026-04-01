@@ -393,3 +393,147 @@ describe("runSweep", () => {
     expect(rounds).toEqual([1]);
   });
 });
+
+describe("two-pass strategy", () => {
+  it("runs layers in reverse order in Pass 1", async () => {
+    await runSweep({ repoPath: "/repo", auto: true, twoPass: true, maxRounds: 1 });
+
+    const tasks = mockRunScan.mock.calls.map((c: unknown[]) => (c[0] as { task: string }).task);
+    // Pass 1 only (maxRounds: 1 skips Pass 2) — layers 7→1 reversed
+    expect(tasks.slice(0, 11)).toEqual([
+      "testing", "docs", "dx", "logging", "performance",
+      "resources", "resilience", "contracts", "state", "qa", "security",
+    ]);
+  });
+
+  it("skips regression checks in Pass 1", async () => {
+    // Layer 7 (testing/docs/dx) finds something and fixes it
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      if (opts.task === "testing") return makeScanResult([makeCluster("test1", "medium")]);
+      return makeScanResult([]);
+    });
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-test1"]));
+
+    const report = await runSweep({ repoPath: "/repo", auto: true, twoPass: true, maxRounds: 1 });
+
+    // Pass 1 should have zero regressions (no regression checks ran)
+    expect(report.rounds[0]!.totalRegressions).toBe(0);
+  });
+
+  it("disables validation in Pass 1", async () => {
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      if (opts.task === "testing") return makeScanResult([makeCluster("test1")]);
+      return makeScanResult([]);
+    });
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-test1"]));
+
+    await runSweep({ repoPath: "/repo", auto: true, twoPass: true, validate: true, maxRounds: 1 });
+
+    // runBatchedFix should be called with validate: false in Pass 1
+    const fixCall = mockRunBatchedFix.mock.calls[0]?.[0];
+    expect(fixCall.validate).toBe(false);
+  });
+
+  it("runs only security + qa in Pass 2", async () => {
+    await runSweep({ repoPath: "/repo", auto: true, twoPass: true });
+
+    const tasks = mockRunScan.mock.calls.map((c: unknown[]) => (c[0] as { task: string }).task);
+    // After 11 Pass 1 tasks, Pass 2 should scan security + qa + exit condition scans
+    const pass2Tasks = tasks.slice(11);
+    const uniquePass2Tasks = [...new Set(pass2Tasks)];
+    expect(uniquePass2Tasks.every((t: string) => t === "security" || t === "qa")).toBe(true);
+  });
+
+  it("enables regression checks in Pass 2", async () => {
+    let securityScanCount = 0;
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      if (opts.task === "security") {
+        securityScanCount++;
+        // Pass 1 scans security once (layer scan). Pass 2 scans it twice
+        // (layer scan + regression check after qa). Return critical on the
+        // regression check (3rd security scan overall).
+        if (securityScanCount >= 3) {
+          return makeScanResult([makeCluster("sec-reg", "critical")]);
+        }
+        return makeScanResult([]);
+      }
+      if (opts.task === "qa") return makeScanResult([makeCluster("qa1", "medium")]);
+      return makeScanResult([]);
+    });
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-qa1"]));
+
+    const report = await runSweep({ repoPath: "/repo", auto: true, twoPass: true });
+
+    // Pass 2 (round 2) should have regression in qa layer
+    const pass2 = report.rounds.find((r) => r.pass === 2);
+    expect(pass2).toBeDefined();
+    const qaLayer = pass2!.layers.find((l) => l.tasks.includes("qa"));
+    expect(qaLayer!.regressions.length).toBeGreaterThan(0);
+  });
+
+  it("preserves validation setting in Pass 2", async () => {
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      if (opts.task === "security") return makeScanResult([makeCluster("sec1")]);
+      return makeScanResult([]);
+    });
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-sec1"]));
+
+    await runSweep({ repoPath: "/repo", auto: true, twoPass: true, validate: true });
+
+    // Pass 2 fix calls should have validate: true
+    const fixCalls = mockRunBatchedFix.mock.calls;
+    const pass2FixCall = fixCalls[fixCalls.length - 1]?.[0];
+    expect(pass2FixCall.validate).toBe(true);
+  });
+
+  it("sets strategy to two-pass in report", async () => {
+    const report = await runSweep({ repoPath: "/repo", auto: true, twoPass: true });
+
+    expect(report.strategy).toBe("two-pass");
+  });
+
+  it("sets strategy to single-pass by default", async () => {
+    const report = await runSweep({ repoPath: "/repo", auto: true });
+
+    expect(report.strategy).toBe("single-pass");
+  });
+
+  it("skips Pass 2 when maxRounds is 1", async () => {
+    const report = await runSweep({ repoPath: "/repo", auto: true, twoPass: true, maxRounds: 1 });
+
+    expect(report.totalRounds).toBe(1);
+    expect(report.rounds[0]!.pass).toBe(1);
+    expect(report.rounds.find((r) => r.pass === 2)).toBeUndefined();
+  });
+
+  it("tags use pass1/pass2 prefix", async () => {
+    mockRunScan.mockImplementation(async (opts: { task: string }) => {
+      if (opts.task === "testing" || opts.task === "security") {
+        return makeScanResult([makeCluster(`${opts.task}-1`)]);
+      }
+      return makeScanResult([]);
+    });
+    mockRunBatchedFix.mockResolvedValue(makeFixResult(["kaicho/fix-1"]));
+
+    await runSweep({ repoPath: "/repo", auto: true, twoPass: true });
+
+    // Pass 1 tag (layer 7 = testing/docs/dx, first in reversed order)
+    expect(mockExeca).toHaveBeenCalledWith(
+      "git", ["tag", "kaicho/sweep-abc12345/pass1-layer-7", "HEAD"],
+      expect.objectContaining({ cwd: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345" }),
+    );
+
+    // Pass 2 tag (layer 1 = security)
+    expect(mockExeca).toHaveBeenCalledWith(
+      "git", ["tag", "kaicho/sweep-abc12345/pass2-layer-1", "HEAD"],
+      expect.objectContaining({ cwd: "/tmp/kaicho-sweep-1234/kaicho-sweep-abc12345" }),
+    );
+  });
+
+  it("exits with zero-critical-high after Pass 2", async () => {
+    // All scans return nothing — Pass 2 exit scan finds zero critical/high
+    const report = await runSweep({ repoPath: "/repo", auto: true, twoPass: true });
+
+    expect(report.exitReason).toBe("zero-critical-high");
+  });
+});

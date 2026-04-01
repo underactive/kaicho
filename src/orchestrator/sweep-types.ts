@@ -38,6 +38,8 @@ export interface SweepOptions {
   verbose?: boolean;
   /** Run a full re-scan after all rounds to populate the remaining-findings report. Off by default. */
   finalScan?: boolean;
+  /** Two-pass strategy: Pass 1 cleans all layers low-to-high without regression checks; Pass 2 runs security+qa with full checks. */
+  twoPass?: boolean;
   onScanProgress?: (progress: import("./run-scan.js").ScanProgress) => void;
   onLayerStart?: (round: number, layer: SweepLayer) => void;
   onLayerComplete?: (round: number, result: SweepLayerResult) => void;
@@ -62,6 +64,7 @@ export interface SweepLayerResult {
 
 export interface SweepRoundResult {
   round: number;
+  pass?: 1 | 2;
   layers: SweepLayerResult[];
   totalFindings: number;
   totalFixed: number;
@@ -87,6 +90,7 @@ export interface SweepReport {
   totalRounds: number;
   maxRounds: number;
   exitReason: "zero-critical-high" | "max-rounds";
+  strategy?: "single-pass" | "two-pass";
   rounds: SweepRoundResult[];
   remaining: SweepRemaining[];
 }

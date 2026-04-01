@@ -109,6 +109,7 @@ Options:
   --reviewer <agent>      Reviewer agent for validation
   --concurrency <n>       Parallel fix concurrency (default: 3)
   --final-scan            Run a full re-scan after all rounds to report remaining findings
+  --two-pass              Two-pass strategy: speed-run all layers, then thorough security+qa pass
   --verbose               Show detailed output
 ```
 

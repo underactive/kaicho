@@ -228,6 +228,144 @@ async function executeLayer(
 }
 
 /**
+ * Two-pass sweep: Pass 1 cleans all layers low→high (no regression checks,
+ * no validation). Pass 2 runs security + QA with full checks on the clean base.
+ */
+async function runTwoPassSweep(
+  sweepWorktreePath: string,
+  absRepoPath: string,
+  options: SweepOptions,
+  sweepBranch: string,
+  maxRounds: number,
+): Promise<{
+  rounds: SweepRoundResult[];
+  regressions: SweepRegressionReport["regressions"];
+  exitReason: SweepReport["exitReason"];
+}> {
+  const rounds: SweepRoundResult[] = [];
+  const allRegressions: SweepRegressionReport["regressions"] = [];
+  let exitReason: SweepReport["exitReason"] = "max-rounds";
+
+  // ── Pass 1: all layers reversed, no regression checks, no validation ──
+  {
+    const roundStartMs = Date.now();
+    const layerResults: SweepLayerResult[] = [];
+    const pass1Options: SweepOptions = { ...options, validate: false };
+    const reversedLayers = [...SWEEP_LAYERS].reverse();
+
+    log("info", "Two-pass sweep: starting Pass 1 (speed run)", {
+      layers: reversedLayers.map((l) => l.layer),
+    });
+
+    for (let i = 0; i < reversedLayers.length; i++) {
+      const layer = reversedLayers[i]!;
+      try {
+        const { result } = await executeLayer(
+          1, layer, i, sweepWorktreePath, absRepoPath, pass1Options, [],
+        );
+        layerResults.push(result);
+        options.onLayerComplete?.(1, result);
+
+        if (result.keptBranches.length > 0) {
+          await execa("git", ["tag", `${sweepBranch}/pass1-layer-${layer.layer}`, "HEAD"], {
+            cwd: sweepWorktreePath, reject: false,
+          });
+        }
+      } catch (err) {
+        log("error", "Pass 1 layer failed, continuing", { layer: layer.layer, error: String(err) });
+        await execa("git", ["reset", "--merge"], { cwd: sweepWorktreePath, reject: false });
+      }
+    }
+
+    const roundResult: SweepRoundResult = {
+      round: 1,
+      pass: 1,
+      layers: layerResults,
+      totalFindings: layerResults.reduce((s, l) => s + l.findings, 0),
+      totalFixed: layerResults.reduce((s, l) => s + l.fixed, 0),
+      totalRegressions: 0,
+      criticalHighRemaining: 0,
+      durationMs: Date.now() - roundStartMs,
+    };
+    rounds.push(roundResult);
+    options.onRoundComplete?.(roundResult);
+  }
+
+  // ── Pass 2: security + QA only, with regression checks + validation ──
+  if (maxRounds >= 2) {
+    const roundStartMs = Date.now();
+    const layerResults: SweepLayerResult[] = [];
+    const prevLayers: Array<{ layer: SweepLayer; criticalHigh: number }> = [];
+    const pass2Layers = SWEEP_LAYERS.slice(0, 2);
+
+    log("info", "Two-pass sweep: starting Pass 2 (security + qa)", {
+      layers: pass2Layers.map((l) => l.layer),
+    });
+
+    for (let i = 0; i < pass2Layers.length; i++) {
+      const layer = pass2Layers[i]!;
+      try {
+        const { result, criticalHigh } = await executeLayer(
+          2, layer, i, sweepWorktreePath, absRepoPath, options, prevLayers,
+        );
+        layerResults.push(result);
+        options.onLayerComplete?.(2, result);
+
+        for (const reg of result.regressions) {
+          allRegressions.push({
+            round: 2, layer: layer.layer,
+            previousLayerTasks: reg.previousLayerTasks,
+            flaggedBranches: reg.flaggedBranches,
+            newCriticalHighCount: reg.newFindingCount,
+            details: reg.details,
+          });
+        }
+
+        if (result.keptBranches.length > 0) {
+          await execa("git", ["tag", `${sweepBranch}/pass2-layer-${layer.layer}`, "HEAD"], {
+            cwd: sweepWorktreePath, reject: false,
+          });
+        }
+
+        prevLayers.push({ layer, criticalHigh });
+      } catch (err) {
+        log("error", "Pass 2 layer failed, continuing", { layer: layer.layer, error: String(err) });
+        await execa("git", ["reset", "--merge"], { cwd: sweepWorktreePath, reject: false });
+      }
+    }
+
+    // Exit condition: check critical/high remaining in security + qa
+    let criticalHighRemaining = 0;
+    try {
+      const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
+      const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
+      criticalHighRemaining = countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
+    } catch (err) {
+      log("warn", "Exit condition scan failed", { error: String(err) });
+    }
+
+    const roundResult: SweepRoundResult = {
+      round: 2,
+      pass: 2,
+      layers: layerResults,
+      totalFindings: layerResults.reduce((s, l) => s + l.findings, 0),
+      totalFixed: layerResults.reduce((s, l) => s + l.fixed, 0),
+      totalRegressions: layerResults.reduce((s, l) => s + l.regressions.length, 0),
+      criticalHighRemaining,
+      durationMs: Date.now() - roundStartMs,
+    };
+    rounds.push(roundResult);
+    options.onRoundComplete?.(roundResult);
+
+    if (criticalHighRemaining === 0) {
+      exitReason = "zero-critical-high";
+    }
+  }
+
+  return { rounds, regressions: allRegressions, exitReason };
+}
+
+/**
  * Run a full sweep: multi-round, layered scan→fix→regression loop.
  */
 export async function runSweep(options: SweepOptions): Promise<SweepReport> {
@@ -251,7 +389,14 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
   let exitReason: SweepReport["exitReason"] = "max-rounds";
 
   try {
-    for (let round = 1; round <= maxRounds; round++) {
+    if (options.twoPass) {
+      const twoPassResult = await runTwoPassSweep(
+        sweepWorktreePath, absRepoPath, options, sweepBranch, maxRounds,
+      );
+      rounds.push(...twoPassResult.rounds);
+      allRegressions.push(...twoPassResult.regressions);
+      exitReason = twoPassResult.exitReason;
+    } else for (let round = 1; round <= maxRounds; round++) {
       const roundStartMs = Date.now();
       const layerResults: SweepLayerResult[] = [];
       const prevLayers: Array<{ layer: SweepLayer; criticalHigh: number }> = [];
@@ -370,6 +515,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     totalRounds: rounds.length,
     maxRounds,
     exitReason,
+    strategy: options.twoPass ? "two-pass" : "single-pass",
     rounds,
     remaining,
   };

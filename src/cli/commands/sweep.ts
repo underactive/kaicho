@@ -27,6 +27,7 @@ export const sweepCommand = new Command("sweep")
   .option("--reviewer <agent>", "Reviewer agent for validation")
   .option("--concurrency <n>", "Parallel fix concurrency")
   .option("--final-scan", "Run a full re-scan after all rounds to report remaining findings")
+  .option("--two-pass", "Two-pass strategy: speed-run all layers, then thorough security+qa pass")
   .option("--verbose", "Show detailed output")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;
@@ -133,7 +134,8 @@ export const sweepCommand = new Command("sweep")
     };
 
     if (isTTY) {
-      process.stderr.write(`\n═══ Sweep starting (max ${maxRounds} rounds) ═══\n`);
+      const strategyLabel = opts.twoPass ? "two-pass" : "standard";
+      process.stderr.write(`\n═══ Sweep starting (${strategyLabel}, max ${maxRounds} rounds) ═══\n`);
     }
 
     const report = await runSweep({
@@ -150,6 +152,7 @@ export const sweepCommand = new Command("sweep")
       reviewer: opts.reviewer as string | undefined ?? config.reviewer,
       verbose: opts.verbose === true,
       finalScan: opts.finalScan === true,
+      twoPass: opts.twoPass === true,
       onScanProgress,
       onLayerStart,
       onLayerComplete,
