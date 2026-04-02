@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useSweeps } from "../composables/useSweeps";
+import { useRuns } from "../composables/useRuns";
 import type { SweepReport } from "../types";
 import LayerChart from "../components/LayerChart.vue";
 import NeedsReviewChart from "../components/NeedsReviewChart.vue";
+import AgentSeverityChart from "../components/AgentSeverityChart.vue";
 
 const { sweeps, loading, error } = useSweeps();
+const { runs } = useRuns();
 
 const latest = computed<SweepReport | null>(() => sweeps.value[0] ?? null);
 const older = computed(() => sweeps.value.slice(1));
@@ -107,6 +110,10 @@ function needsReview(sweep: SweepReport): number {
         <div class="border border-zinc-800 rounded-xl p-5 bg-zinc-900/30">
           <h2 class="text-sm font-medium text-zinc-400 mb-4">Needs Review by Layer</h2>
           <NeedsReviewChart :sweep="latest" />
+        </div>
+        <div class="col-span-3 border border-zinc-800 rounded-xl p-5 bg-zinc-900/30">
+          <h2 class="text-sm font-medium text-zinc-400 mb-4">Agent Findings by Severity</h2>
+          <AgentSeverityChart :runs="runs" />
         </div>
       </div>
 

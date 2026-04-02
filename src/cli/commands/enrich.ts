@@ -1,17 +1,11 @@
-import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
-import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { summarizeClusters } from "../../summarizer/index.js";
 import type { RunResult } from "../../types/index.js";
-import type { RunRecord } from "../../suggestion-store/index.js";
-
-function enrichedFileName(task?: string): string {
-  return task ? `enriched-${task}.json` : "enriched.json";
-}
+import { SqliteStore } from "../../suggestion-store/index.js";
 
 export interface EnrichedEntry {
   /** Cluster ID — stable within the same task-scoped clustering context */
@@ -41,7 +35,7 @@ export const enrichCommand = new Command("enrich")
     // Discover which tasks have scan results
     const tasks = opts.task
       ? [opts.task as string]
-      : await discoverTasks(repoPath);
+      : discoverTasks(repoPath);
 
     if (tasks.length === 0) {
       process.stderr.write("  No scan results found. Run 'kaicho scan' first.\n\n");
@@ -51,12 +45,12 @@ export const enrichCommand = new Command("enrich")
     let totalCount = 0;
 
     for (const task of tasks) {
-      const clusters = await loadClustersFromRuns(repoPath, task);
+      const clusters = loadClustersFromRuns(repoPath, task);
       if (clusters.length === 0) continue;
 
       // Load existing enrichment data if not forcing
       if (!opts.force) {
-        await applyEnrichedCache(repoPath, clusters, task);
+        applyEnrichedCache(repoPath, clusters, task);
       }
 
       const needsSummary = clusters.filter((c) => !c.summary).length;
@@ -91,163 +85,91 @@ export const enrichCommand = new Command("enrich")
         process.exit(1);
       }
 
-      await saveEnrichedCache(repoPath, clusters, opts.model as string, task);
+      saveEnrichedCache(repoPath, clusters, opts.model as string, task);
       totalCount += count;
     }
 
     process.stdout.write(`\n  Enriched ${totalCount} finding${totalCount === 1 ? "" : "s"} across ${tasks.length} task${tasks.length === 1 ? "" : "s"}.\n\n`);
   });
 
-async function loadClustersFromRuns(
+function loadClustersFromRuns(
   repoPath: string,
   task?: string,
-): Promise<SuggestionCluster[]> {
-  const runsDir = path.join(repoPath, KAICHO_DIR, RUNS_DIR);
-
-  let files: string[];
+): SuggestionCluster[] {
+  const store = new SqliteStore(repoPath);
   try {
-    files = await fs.readdir(runsDir);
-  } catch {
-    return [];
-  }
+    const records = store.readRunRecords({ task });
 
-  const jsonFiles = files.filter((f) => f.endsWith(".json")).sort().reverse();
-
-  let records: RunRecord[] = [];
-  for (const file of jsonFiles) {
-    try {
-      const content = await fs.readFile(path.join(runsDir, file), "utf-8");
-      records.push(JSON.parse(content) as RunRecord);
-    } catch {
-      continue;
+    // Keep only the latest run per agent (same dedup as before)
+    const seen = new Map<string, (typeof records)[number]>();
+    for (const r of records) {
+      if (!seen.has(r.agent)) seen.set(r.agent, r);
     }
-  }
 
-  if (task) {
-    records = records.filter((r) => r.task === task);
-  }
+    const results: RunResult[] = Array.from(seen.values()).map((r) => ({
+      agent: r.agent,
+      status: r.status as RunResult["status"],
+      suggestions: r.suggestions,
+      rawOutput: "",
+      rawError: "",
+      durationMs: r.durationMs,
+      startedAt: r.startedAt,
+      error: r.error,
+    }));
 
-  const seen = new Map<string, RunRecord>();
-  for (const r of records) {
-    if (!seen.has(r.agent)) seen.set(r.agent, r);
-  }
-
-  const results: RunResult[] = Array.from(seen.values()).map((r) => ({
-    agent: r.agent,
-    status: r.status as RunResult["status"],
-    suggestions: r.suggestions,
-    rawOutput: "",
-    rawError: "",
-    durationMs: r.durationMs,
-    startedAt: r.startedAt,
-    error: r.error,
-  }));
-
-  return clusterSuggestions(results);
-}
-
-async function discoverTasks(repoPath: string): Promise<string[]> {
-  const runsDir = path.join(repoPath, KAICHO_DIR, RUNS_DIR);
-  try {
-    const files = await fs.readdir(runsDir);
-    const tasks = new Set<string>();
-    for (const file of files) {
-      if (!file.endsWith(".json")) continue;
-      try {
-        const content = await fs.readFile(path.join(runsDir, file), "utf-8");
-        const record = JSON.parse(content) as { task?: string };
-        if (record.task) tasks.add(record.task);
-      } catch { continue; }
-    }
-    return Array.from(tasks);
-  } catch {
-    return [];
+    return clusterSuggestions(results);
+  } finally {
+    store.close();
   }
 }
 
-async function saveEnrichedCache(
+function discoverTasks(repoPath: string): string[] {
+  const store = new SqliteStore(repoPath);
+  try {
+    return store.distinctTasks();
+  } finally {
+    store.close();
+  }
+}
+
+function saveEnrichedCache(
   repoPath: string,
   clusters: SuggestionCluster[],
   model: string,
   task?: string,
-): Promise<void> {
-  const entries: EnrichedEntry[] = [];
-  for (const c of clusters) {
-    if (!c.summary) continue;
-    entries.push({ id: c.id, file: c.file, summary: c.summary });
+): void {
+  const store = new SqliteStore(repoPath);
+  try {
+    for (const c of clusters) {
+      if (!c.summary) continue;
+      store.saveEnrichment(c.id, c.file, c.summary, model, task);
+    }
+  } finally {
+    store.close();
   }
-
-  const enriched: EnrichedData = {
-    generatedAt: new Date().toISOString(),
-    model,
-    entries,
-  };
-
-  const cachePath = path.join(repoPath, KAICHO_DIR, enrichedFileName(task));
-  await fs.writeFile(cachePath, JSON.stringify(enriched, null, 2), "utf-8");
 }
 
 /**
  * Apply cached enrichment data (summaries) to clusters.
- * Matches by file — stable regardless of clustering context.
- * Tries task-specific cache first, falls back to generic.
+ * Matches by cluster ID.
  */
-export async function applyEnrichedCache(
+export function applyEnrichedCache(
   repoPath: string,
   clusters: SuggestionCluster[],
   task?: string,
-): Promise<void> {
-  // Collect all enriched files to load
-  const cacheFiles: string[] = [];
-
-  if (task) {
-    cacheFiles.push(path.join(repoPath, KAICHO_DIR, enrichedFileName(task)));
-  }
-
-  // Always also try loading all per-task caches (covers the no-task-filter case)
+): void {
+  const store = new SqliteStore(repoPath);
   try {
-    const kaichoDir = path.join(repoPath, KAICHO_DIR);
-    const files = await fs.readdir(kaichoDir);
-    for (const f of files) {
-      if (f.startsWith("enriched-") && f.endsWith(".json")) {
-        const fullPath = path.join(kaichoDir, f);
-        if (!cacheFiles.includes(fullPath)) {
-          cacheFiles.push(fullPath);
+    const summaryById = store.loadEnrichments(task);
+    for (const cluster of clusters) {
+      if (!cluster.summary) {
+        const cached = summaryById.get(cluster.id);
+        if (cached) {
+          cluster.summary = cached;
         }
       }
     }
-  } catch {
-    // No .kaicho dir
-  }
-
-  // Also try generic enriched.json
-  cacheFiles.push(path.join(repoPath, KAICHO_DIR, enrichedFileName()));
-
-  // Build summary map from all available cache files
-  const summaryById = new Map<string, string>();
-  for (const cachePath of cacheFiles) {
-    try {
-      const content = await fs.readFile(cachePath, "utf-8");
-      const data = JSON.parse(content) as EnrichedData;
-      const rawEntries = (data.entries ?? (data as unknown as Record<string, unknown>)["clusters"] ?? []) as unknown as Array<Record<string, unknown>>;
-      for (const entry of rawEntries) {
-        const id = entry["id"] as string | undefined;
-        const summary = entry["summary"] as string | undefined;
-        if (id && summary && !summaryById.has(id)) {
-          summaryById.set(id, summary);
-        }
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  for (const cluster of clusters) {
-    if (!cluster.summary) {
-      const cached = summaryById.get(cluster.id);
-      if (cached) {
-        cluster.summary = cached;
-      }
-    }
+  } finally {
+    store.close();
   }
 }

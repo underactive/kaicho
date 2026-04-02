@@ -1,15 +1,16 @@
 import { Hono } from "hono";
+import type Database from "better-sqlite3";
 import { readClusters } from "../readers/cluster-reader.js";
 
-export function clusterRoutes(repoPath: string): Hono {
+export function clusterRoutes(db: Database.Database): Hono {
   const app = new Hono();
 
-  app.get("/", async (c) => {
+  app.get("/", (c) => {
     const task = c.req.query("task");
     const agent = c.req.query("agent");
     const minSeverity = c.req.query("minSeverity");
 
-    let clusters = await readClusters(repoPath, {
+    let clusters = readClusters(db, {
       task: task || undefined,
       agent: agent || undefined,
     });

@@ -1,18 +1,20 @@
 import { Hono } from "hono";
+import type Database from "better-sqlite3";
 import { readSweepReports, readSweepReport } from "../readers/sweep-reader.js";
 import { readFixLog } from "../readers/fix-reader.js";
 import { SWEEP_LAYERS } from "../types.js";
 
-export function sweepRoutes(repoPath: string): Hono {
+export function sweepRoutes(db: Database.Database): Hono {
   const app = new Hono();
 
-  app.get("/", async (c) => {
-    const reports = await readSweepReports(repoPath);
+  app.get("/", (c) => {
+    const reports = readSweepReports(db);
     return c.json(reports);
   });
 
-  app.get("/:filename", async (c) => {
-    const report = await readSweepReport(repoPath, c.req.param("filename"));
+  app.get("/:index", (c) => {
+    const index = parseInt(c.req.param("index"), 10);
+    const report = readSweepReport(db, index);
     if (!report) return c.json({ error: "Not found" }, 404);
     return c.json(report);
   });
@@ -20,13 +22,13 @@ export function sweepRoutes(repoPath: string): Hono {
   /**
    * Get layer-level detail for a specific sweep.
    * Returns remaining (unfixed) items filtered by layer tasks,
-   * plus fixed entries from fixed.json.
+   * plus fixed entries from the fix log.
    */
-  app.get("/:index/layers/:layer", async (c) => {
+  app.get("/:index/layers/:layer", (c) => {
     const index = parseInt(c.req.param("index"), 10);
     const layerNum = parseInt(c.req.param("layer"), 10);
 
-    const reports = await readSweepReports(repoPath);
+    const reports = readSweepReports(db);
     const report = reports[index];
     if (!report) return c.json({ error: "Sweep not found" }, 404);
 
@@ -45,8 +47,8 @@ export function sweepRoutes(repoPath: string): Hono {
       result: round.layers.find((l) => l.layer === layerNum),
     })).filter((r) => r.result);
 
-    // Get fixed entries (limited detail — no severity/rationale)
-    const fixLog = await readFixLog(repoPath);
+    // Get fixed entries
+    const fixLog = readFixLog(db);
 
     return c.json({
       layer: layerNum,

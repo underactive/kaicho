@@ -28,8 +28,9 @@ vi.mock("../agent-adapters/index.js", () => {
 });
 
 vi.mock("../suggestion-store/index.js", () => ({
-  JsonStore: vi.fn().mockImplementation(() => ({
-    save: vi.fn().mockResolvedValue("/fake/path.json"),
+  SqliteStore: vi.fn().mockImplementation(() => ({
+    save: vi.fn().mockReturnValue("fake-run-id"),
+    close: vi.fn(),
   })),
 }));
 

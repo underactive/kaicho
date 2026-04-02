@@ -2,7 +2,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { RunResult } from "../types/index.js";
 import { resolveModel, getBase } from "../config/index.js";
-import { JsonStore } from "../suggestion-store/index.js";
+import { SqliteStore } from "../suggestion-store/index.js";
 import { buildSecurityScanPrompt, buildQaScanPrompt, buildDocsScanPrompt, buildContractsScanPrompt, buildStateScanPrompt, buildResourcesScanPrompt, buildTestingScanPrompt, buildDxScanPrompt, buildPerformanceScanPrompt, buildResilienceScanPrompt, buildLoggingScanPrompt, SCAN_TASKS } from "../prompts/index.js";
 import { clusterSuggestions, type SuggestionCluster } from "../dedup/index.js";
 import { resolveScope, buildFileManifest, type ScopeOptions } from "../scope/index.js";
@@ -227,21 +227,18 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
   });
 
   // Save each result
-  const store = new JsonStore(absRepoPath);
-  for (const result of results) {
-    if (result.status === "skipped") continue;
-    try {
-      await store.save(result, task, absRepoPath);
-    } catch (err) {
-      log("error", "Failed to save run result", { agent: result.agent, error: String(err) });
-    }
-  }
-
-  // Prune old runs (default: keep 3 per agent+task)
+  const store = new SqliteStore(absRepoPath);
   try {
-    await store.prune(options.retention ?? 3);
-  } catch {
-    // Best effort
+    for (const result of results) {
+      if (result.status === "skipped") continue;
+      try {
+        store.save(result, task, absRepoPath);
+      } catch (err) {
+        log("error", "Failed to save run result", { agent: result.agent, error: String(err) });
+      }
+    }
+  } finally {
+    store.close();
   }
 
   const clusters = clusterSuggestions(results);

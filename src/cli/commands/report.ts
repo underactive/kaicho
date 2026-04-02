@@ -1,16 +1,14 @@
-import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
-import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import { getFixedClusterIds } from "../../fix-log/index.js";
 import { applyEnrichedCache } from "./enrich.js";
 import { formatHuman, formatMultiHuman } from "../formatters/human.js";
 import { formatMultiJson } from "../formatters/json.js";
+import { SqliteStore, type RunRecord } from "../../suggestion-store/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import type { RunResult } from "../../types/index.js";
-import type { RunRecord } from "../../suggestion-store/index.js";
 
 const NO_COLOR = "NO_COLOR" in process.env;
 function color(text: string, code: string): string {
@@ -60,45 +58,23 @@ export const reportCommand = new Command("report")
       ? path.join(os.homedir(), (opts.repo as string).slice(1))
       : opts.repo as string;
     const absRepoPath = path.resolve(repoPath);
-    const runsDir = path.join(absRepoPath, KAICHO_DIR, RUNS_DIR);
 
-    let files: string[];
+    // Load run records from SQLite
+    const store = new SqliteStore(absRepoPath);
+    let records;
     try {
-      files = await fs.readdir(runsDir);
-    } catch {
-      process.stderr.write(`  No scan results found in ${runsDir}\n`);
+      records = store.readRunRecords({
+        task: opts.task as string | undefined,
+        agent: opts.agent as string | undefined,
+      });
+    } finally {
+      store.close();
+    }
+
+    if (records.length === 0) {
+      process.stderr.write(`  No scan results found.\n`);
       process.stderr.write(`  Run 'kaicho scan --repo=${opts.repo as string}' first.\n\n`);
       process.exit(1);
-    }
-
-    // Filter to JSON files, sort by name (timestamp) descending
-    const jsonFiles = files
-      .filter((f) => f.endsWith(".json"))
-      .sort()
-      .reverse();
-
-    if (jsonFiles.length === 0) {
-      process.stderr.write(`  No scan results found.\n\n`);
-      process.exit(1);
-    }
-
-    // Load run records
-    let records: RunRecord[] = [];
-    for (const file of jsonFiles) {
-      try {
-        const content = await fs.readFile(path.join(runsDir, file), "utf-8");
-        records.push(JSON.parse(content) as RunRecord);
-      } catch {
-        // Skip corrupted files
-      }
-    }
-
-    // Filter by agent and task
-    if (opts.agent) {
-      records = records.filter((r) => r.agent === opts.agent);
-    }
-    if (opts.task) {
-      records = records.filter((r) => r.task === opts.task);
     }
 
     // Get latest run per agent (or last N if specified)

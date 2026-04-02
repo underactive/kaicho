@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type Database from "better-sqlite3";
 import type { SuggestionCluster } from "../types.js";
 import { SEVERITY_RANK } from "../types.js";
 import { readRunRecords, type RunFilter } from "./run-reader.js";
@@ -11,9 +12,9 @@ const SIMILARITY_THRESHOLD = 0.35;
  * Load run records and compute clusters from them, annotating with fix status.
  * This replicates the CLI's clustering algorithm as a pure read-only computation.
  */
-export async function readClusters(repoPath: string, filter?: RunFilter): Promise<SuggestionCluster[]> {
-  const records = await readRunRecords(repoPath, filter);
-  const fixedIds = await getFixedClusterIds(repoPath);
+export function readClusters(db: Database.Database, filter?: RunFilter): SuggestionCluster[] {
+  const records = readRunRecords(db, filter);
+  const fixedIds = getFixedClusterIds(db);
 
   // Build RunResult-like objects from RunRecords
   const results = records.map((r) => ({

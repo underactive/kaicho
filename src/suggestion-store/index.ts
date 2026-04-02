@@ -1,1 +1,1 @@
-export { JsonStore, type RunRecord } from "./json-store.js";
+export { SqliteStore, type RunRecord } from "./sqlite-store.js";

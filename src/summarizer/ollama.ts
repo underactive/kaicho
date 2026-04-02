@@ -1,6 +1,4 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { KAICHO_DIR } from "../config/index.js";
+import { SqliteStore } from "../suggestion-store/index.js";
 import { log } from "../logger/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
 
@@ -142,7 +140,7 @@ export async function summarizeClusters(
 }
 
 /**
- * Persist enriched summaries to the cache file so report/fix can load them.
+ * Persist enriched summaries to the SQLite store so report/fix can load them.
  */
 export async function saveEnrichedCache(
   repoPath: string,
@@ -155,13 +153,12 @@ export async function saveEnrichedCache(
 
   if (entries.length === 0) return;
 
-  const fileName = task ? `enriched-${task}.json` : "enriched.json";
-  const cachePath = path.join(repoPath, KAICHO_DIR, fileName);
-
-  await fs.mkdir(path.dirname(cachePath), { recursive: true });
-  await fs.writeFile(
-    cachePath,
-    JSON.stringify({ generatedAt: new Date().toISOString(), model: "auto", entries }, null, 2),
-    "utf-8",
-  );
+  const store = new SqliteStore(repoPath);
+  try {
+    for (const e of entries) {
+      store.saveEnrichment(e.id, e.file, e.summary, "auto", task);
+    }
+  } finally {
+    store.close();
+  }
 }

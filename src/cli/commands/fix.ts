@@ -1,9 +1,8 @@
-import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import { Command } from "commander";
-import { KAICHO_DIR, RUNS_DIR } from "../../config/index.js";
+import { SqliteStore } from "../../suggestion-store/index.js";
 import { clusterSuggestions, filterBySeverity } from "../../dedup/index.js";
 import type { SuggestionCluster } from "../../dedup/index.js";
 import { applyEnrichedCache } from "./enrich.js";
@@ -16,7 +15,7 @@ import { buildRetryFixPrompt } from "../../prompts/index.js";
 import { buildCommitMessage } from "../../orchestrator/commit-message.js";
 import { loadConfig, resolveModel } from "../../config/index.js";
 import type { RunResult } from "../../types/index.js";
-import type { RunRecord } from "../../suggestion-store/index.js";
+import type { RunRecord } from "../../suggestion-store/sqlite-store.js";
 
 const NO_COLOR = "NO_COLOR" in process.env;
 
@@ -344,30 +343,15 @@ async function loadClusters(
   repoPath: string,
   task?: string,
 ): Promise<SuggestionCluster[]> {
-  const runsDir = path.join(repoPath, KAICHO_DIR, RUNS_DIR);
-
-  let files: string[];
+  const store = new SqliteStore(repoPath);
+  let records: RunRecord[];
   try {
-    files = await fs.readdir(runsDir);
-  } catch {
-    return [];
+    records = store.readRunRecords({ task });
+  } finally {
+    store.close();
   }
 
-  const jsonFiles = files.filter((f) => f.endsWith(".json")).sort().reverse();
-
-  let records: RunRecord[] = [];
-  for (const file of jsonFiles) {
-    try {
-      const content = await fs.readFile(path.join(runsDir, file), "utf-8");
-      records.push(JSON.parse(content) as RunRecord);
-    } catch {
-      continue;
-    }
-  }
-
-  if (task) {
-    records = records.filter((r) => r.task === task);
-  }
+  if (records.length === 0) return [];
 
   // Get latest per agent
   const seen = new Map<string, RunRecord>();
@@ -387,7 +371,7 @@ async function loadClusters(
   }));
 
   const clusters = clusterSuggestions(results);
-  await applyEnrichedCache(repoPath, clusters, task);
+  applyEnrichedCache(repoPath, clusters, task);
   return clusters;
 }
 

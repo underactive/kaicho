@@ -1,12 +1,13 @@
 import { Hono } from "hono";
+import type Database from "better-sqlite3";
 import { readFixLog, readDiscardedLog } from "../readers/fix-reader.js";
 import { readBranchDetail } from "../readers/git-reader.js";
 
-export function fixedRoutes(repoPath: string): Hono {
+export function fixedRoutes(db: Database.Database, repoPath: string): Hono {
   const app = new Hono();
 
-  app.get("/", async (c) => {
-    const entries = await readFixLog(repoPath);
+  app.get("/", (c) => {
+    const entries = readFixLog(db);
     return c.json(entries);
   });
 
@@ -29,11 +30,11 @@ export function fixedRoutes(repoPath: string): Hono {
   return app;
 }
 
-export function discardedRoutes(repoPath: string): Hono {
+export function discardedRoutes(db: Database.Database): Hono {
   const app = new Hono();
 
-  app.get("/", async (c) => {
-    const entries = await readDiscardedLog(repoPath);
+  app.get("/", (c) => {
+    const entries = readDiscardedLog(db);
     return c.json(entries);
   });
 

@@ -1,65 +1,42 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import type Database from "better-sqlite3";
 import type { SweepReport } from "../types.js";
 
-const KAICHO_DIR = ".kaicho";
-const SWEEP_REPORTS_DIR = "sweep-reports";
-const LEGACY_REPORT = "sweep-report.json";
-
 /**
- * Read all sweep reports from .kaicho/sweep-reports/, sorted newest first.
- * Falls back to the legacy .kaicho/sweep-report.json if no history dir exists.
+ * Read all sweep reports from SQLite, sorted newest first.
  */
-export async function readSweepReports(repoPath: string): Promise<SweepReport[]> {
-  const reportsDir = path.join(repoPath, KAICHO_DIR, SWEEP_REPORTS_DIR);
+export function readSweepReports(db: Database.Database): SweepReport[] {
+  const rows = db.prepare(
+    "SELECT * FROM sweep_reports WHERE exit_reason != 'regressions' ORDER BY started_at DESC",
+  ).all() as Array<{
+    started_at: string; completed_at: string; repo_path: string; sweep_branch: string;
+    total_rounds: number; max_rounds: number; exit_reason: string; strategy: string | null;
+    report_json: string;
+  }>;
 
-  try {
-    const files = (await fs.readdir(reportsDir))
-      .filter((f) => f.endsWith(".json"))
-      .sort()
-      .reverse(); // newest first
-
-    const reports: SweepReport[] = [];
-    for (const file of files) {
-      try {
-        const content = await fs.readFile(path.join(reportsDir, file), "utf-8");
-        reports.push(JSON.parse(content) as SweepReport);
-      } catch {
-        // Skip unparseable files
-      }
-    }
-
-    if (reports.length > 0) return reports;
-  } catch {
-    // No sweep-reports dir — fall through to legacy
-  }
-
-  // Fallback: read the legacy single report file
-  return readLegacySweepReport(repoPath);
+  return rows.map((r) => {
+    const parsed = JSON.parse(r.report_json) as {
+      rounds: SweepReport["rounds"];
+      remaining: SweepReport["remaining"];
+    };
+    return {
+      startedAt: r.started_at,
+      completedAt: r.completed_at,
+      repoPath: r.repo_path,
+      sweepBranch: r.sweep_branch,
+      totalRounds: r.total_rounds,
+      maxRounds: r.max_rounds,
+      exitReason: r.exit_reason as SweepReport["exitReason"],
+      strategy: r.strategy as SweepReport["strategy"],
+      rounds: parsed.rounds,
+      remaining: parsed.remaining,
+    };
+  });
 }
 
 /**
- * Read a single sweep report by filename from .kaicho/sweep-reports/.
+ * Read a single sweep report by index (0 = latest).
  */
-export async function readSweepReport(repoPath: string, filename: string): Promise<SweepReport | null> {
-  // Prevent path traversal
-  const sanitized = path.basename(filename);
-  const filePath = path.join(repoPath, KAICHO_DIR, SWEEP_REPORTS_DIR, sanitized);
-
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content) as SweepReport;
-  } catch {
-    return null;
-  }
-}
-
-async function readLegacySweepReport(repoPath: string): Promise<SweepReport[]> {
-  const filePath = path.join(repoPath, KAICHO_DIR, LEGACY_REPORT);
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    return [JSON.parse(content) as SweepReport];
-  } catch {
-    return [];
-  }
+export function readSweepReport(db: Database.Database, index: number): SweepReport | null {
+  const reports = readSweepReports(db);
+  return reports[index] ?? null;
 }
