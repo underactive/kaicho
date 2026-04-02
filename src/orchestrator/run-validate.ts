@@ -14,7 +14,7 @@ export interface ValidateOptions {
   fixAgent: string;
   timeoutMs?: number;
   models?: Record<string, string>;
-  reviewer?: string;
+  reviewers?: string[];
   verbose?: boolean;
   fixerContext?: string;
   repoContext?: string;
@@ -35,13 +35,12 @@ export async function runValidation(options: ValidateOptions): Promise<ValidateR
   const absRepoPath = path.resolve(expanded);
   const startMs = Date.now();
 
-  // Pick reviewer: explicit override > pool > auto-pick
+  // Pick reviewer: pool > auto-pick
   let reviewerName: string | null;
-  if (options.reviewer?.includes(",")) {
-    const pool = options.reviewer.split(",").map((s) => s.trim());
-    reviewerName = pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES, pool);
+  if (options.reviewers && options.reviewers.length > 0) {
+    reviewerName = pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES, options.reviewers);
   } else {
-    reviewerName = options.reviewer ?? pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES);
+    reviewerName = pickReviewer(fixAgent, cluster.agents, ALL_AGENT_NAMES);
   }
   if (!reviewerName) {
     return {

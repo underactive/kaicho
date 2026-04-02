@@ -87,7 +87,7 @@ Options:
   --timeout <ms>          Agent timeout in milliseconds (default: 1800000)
   --min-severity <level>  Minimum severity to fix
   --validate              Run a second agent to review each fix
-  --reviewer <agent>      Agent for validation (default: auto-pick different from fixer)
+  --reviewers <agents>    Reviewer pool, comma-separated (default: auto-pick different from fixer)
   --batch                 Fix in parallel with git worktrees (keep/discard/retry per fix)
   --auto                  Batch fix without confirmations (auto-discard concerns)
   --verbose               Show agent stderr output in real-time
@@ -106,7 +106,7 @@ Options:
   --exclude <agents>      Exclude agents
   --timeout <ms>          Agent timeout (default: 1800000)
   --validate              Cross-agent validation on fixes
-  --reviewer <agent>      Reviewer agent for validation
+  --reviewers <agents>    Reviewer pool, comma-separated
   --concurrency <n>       Parallel fix concurrency (default: 3)
   --final-scan            Run a full re-scan after all rounds to report remaining findings
   --two-pass              Two-pass strategy: speed-run all layers, then thorough security+qa pass
@@ -176,10 +176,10 @@ Create per-repo config with `kaicho init`, or create the global config manually:
     "claude": "claude-opus-4-6",
     "codex": "o3"
   },
-  "reviewer": "claude",
+  "reviewers": ["claude"],
   "concurrency": 3,
   "retention": 3,
-  "summarizerModel": "gemma3:1b",
+  "summarizerModel": "openrouter:openai/gpt-4o-mini",
   "maxSweepRounds": 3
 }
 ```
@@ -191,7 +191,7 @@ CLI flags override config values.
 1. **Scan** — Fingerprints the target repo (language, framework, test runner, linters, etc.) and injects best-effort project context into the prompt. In monorepos, workspace packages are resolved and fingerprinted individually. Spawns each agent CLI as a subprocess. Agents run in parallel.
 2. **Parse** — Agent output is extracted from freeform text via multi-strategy parsing (direct JSON, code fences, brace extraction). Field names are normalized to handle LLM drift. Every suggestion is validated with Zod.
 3. **Cluster** — Suggestions are grouped by file + line proximity (±5 lines), then merged by rationale keyword similarity. Cross-agent agreement surfaces first.
-4. **Enrich** — If Ollama is running, each cluster gets a one-line LLM summary. Cached per-task.
+4. **Enrich** — Each cluster gets a one-line LLM summary. Supports local Ollama (default: `gemma3:1b`) or remote models via OpenRouter (`openrouter:<org>/<model>`). Set `OPENROUTER_API_KEY` for remote. Cached per-task.
 5. **Store** — Results saved to `.kaicho/runs/` as JSON. Enrichment cached in `.kaicho/enriched-*.json`.
 6. **Fix** — Agent dispatched with write-access flags on an isolated `kaicho/fix-*` branch. Batch mode uses git worktrees for parallel execution (up to 3 concurrent). Each fix gets its own branch — keep or discard independently. Optional cross-agent validation runs in parallel with fixes. Discarded fixes are logged with full context (diff, fixer reasoning, reviewer rationale) for future review.
 

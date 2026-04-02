@@ -24,7 +24,7 @@ export const enrichCommand = new Command("enrich")
   .description("Generate short IDs and LLM summaries for scan findings")
   .option("--repo <path>", "Path to target repository", ".")
   .option("--task <task>", "Filter scan results by task type")
-  .option("--model <model>", "Ollama model for summaries", "gemma3:1b")
+  .option("--model <model>", "Model for summaries (openrouter:<org>/<model> for remote, or Ollama model name)", "gemma3:1b")
   .option("--force", "Regenerate even if cache exists")
   .action(async (opts) => {
     const rawRepo = opts.repo as string;
@@ -81,7 +81,7 @@ export const enrichCommand = new Command("enrich")
       });
 
       if (count === 0) {
-        process.stderr.write("  Ollama not available or model not found. Install with: ollama pull qwen3:1.7b\n\n");
+        process.stderr.write("  Summarizer not available. For Ollama: ollama pull <model>. For remote: set OPENROUTER_API_KEY.\n\n");
         process.exit(1);
       }
 

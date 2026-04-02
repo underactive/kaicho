@@ -180,7 +180,7 @@ async function executeLayer(
     auto: options.auto,
     verbose: options.verbose,
     validate: options.validate,
-    reviewer: options.reviewer,
+    reviewers: options.reviewers,
     fixLogPath: absRepoPath,
     onProgress: options.onFixProgress,
     onConfirm: options.onConfirm,

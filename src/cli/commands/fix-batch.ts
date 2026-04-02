@@ -41,7 +41,9 @@ export async function handleParallelBatchFix(
       models: config.fixModels ?? config.models,
       scanModels: config.models,
       validate: doValidate,
-      reviewer: (opts["reviewer"] as string | undefined) ?? config.reviewer,
+      reviewers: opts["reviewers"]
+        ? (opts["reviewers"] as string).split(",").map((s: string) => s.trim())
+        : config.reviewers,
       onProgress: (p) => {
         if (isTTY) {
           if (p.step === "creating-worktree") {

@@ -34,7 +34,7 @@ export interface SweepOptions {
   scanModels?: Record<string, string>;
   concurrency?: number;
   validate?: boolean;
-  reviewer?: string;
+  reviewers?: string[];
   verbose?: boolean;
   /** Run a full re-scan after all rounds to populate the remaining-findings report. Off by default. */
   finalScan?: boolean;

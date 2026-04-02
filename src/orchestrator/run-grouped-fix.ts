@@ -45,7 +45,7 @@ export interface GroupedFixOptions {
   auto?: boolean;
   verbose?: boolean;
   validate?: boolean;
-  reviewer?: string;
+  reviewers?: string[];
   fixLogPath?: string;
   onProgress?: (progress: ParallelFixProgress) => void;
   onConfirm?: ParallelFixOptions["onConfirm"];
@@ -231,7 +231,7 @@ export async function runGroupedFix(
         fixAgent: agentName,
         timeoutMs: options.timeoutMs,
         models: options.models,
-        reviewer: options.reviewer,
+        reviewers: options.reviewers,
         verbose: options.verbose,
         fixerContext,
         repoContext,

@@ -24,7 +24,7 @@ export const sweepCommand = new Command("sweep")
   .option("--exclude <agents>", "Exclude agents (comma-separated)")
   .option("--timeout <ms>", "Agent timeout in milliseconds")
   .option("--validate", "Cross-agent validation on fixes")
-  .option("--reviewer <agent>", "Reviewer agent for validation")
+  .option("--reviewers <agents>", "Reviewer agent pool, comma-separated")
   .option("--concurrency <n>", "Parallel fix concurrency")
   .option("--final-scan", "Run a full re-scan after all rounds to report remaining findings")
   .option("--two-pass", "Two-pass strategy: speed-run all layers, then thorough security+qa pass")
@@ -175,7 +175,9 @@ export const sweepCommand = new Command("sweep")
       scanModels: config.models,
       concurrency: opts.concurrency ? parseInt(opts.concurrency as string, 10) : config.concurrency ?? 3,
       validate: opts.validate === true,
-      reviewer: opts.reviewer as string | undefined ?? config.reviewer,
+      reviewers: opts.reviewers
+        ? (opts.reviewers as string).split(",").map((s: string) => s.trim())
+        : config.reviewers,
       verbose: opts.verbose === true,
       finalScan: opts.finalScan === true,
       twoPass: opts.twoPass === true,

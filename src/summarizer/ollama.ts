@@ -1,6 +1,8 @@
 import { SqliteStore } from "../suggestion-store/index.js";
 import { log } from "../logger/index.js";
 import type { SuggestionCluster } from "../dedup/index.js";
+import type { SummarizerProvider } from "./provider.js";
+import { parseModelSpec, resolveProvider } from "./provider.js";
 
 const DEFAULT_MODEL = "gemma3:1b";
 const DEFAULT_URL = "http://localhost:11434";
@@ -20,66 +22,76 @@ export interface SummarizerOptions {
 }
 
 /**
- * Check if Ollama is running and the model is available.
+ * Ollama-backed summarizer provider (local LLM).
  */
-export async function isOllamaAvailable(options: SummarizerOptions = {}): Promise<boolean> {
-  const url = options.ollamaUrl ?? DEFAULT_URL;
-  try {
-    const res = await fetch(`${url}/api/tags`);
-    if (!res.ok) return false;
-    const data = await res.json() as { models?: Array<{ name: string }> };
-    const model = options.model ?? DEFAULT_MODEL;
-    const available = data.models?.some((m) => m.name === model || m.name.startsWith(model.split(":")[0] + ":")) ?? false;
-    return available;
-  } catch {
-    return false;
+export class OllamaProvider implements SummarizerProvider {
+  readonly name = "ollama";
+  constructor(
+    private readonly model: string = DEFAULT_MODEL,
+    private readonly url: string = DEFAULT_URL,
+  ) {}
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.url}/api/tags`);
+      if (!res.ok) return false;
+      const data = await res.json() as { models?: Array<{ name: string }> };
+      return data.models?.some(
+        (m) => m.name === this.model || m.name.startsWith(this.model.split(":")[0] + ":"),
+      ) ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  async complete(prompt: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${this.url}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+        }),
+      });
+
+      if (!res.ok) return null;
+
+      const data = await res.json() as { message?: { content?: string } };
+      return data.message?.content?.trim() ?? null;
+    } catch (err) {
+      log("warn", "Ollama summary failed", { error: String(err), model: this.model });
+      return null;
+    }
   }
 }
 
 /**
- * Summarize a single cluster's rationales into one sentence using a local LLM.
+ * Check if Ollama is running and the model is available.
+ * Kept for backward compatibility — delegates to OllamaProvider.
+ */
+export async function isOllamaAvailable(options: SummarizerOptions = {}): Promise<boolean> {
+  const provider = new OllamaProvider(
+    options.model ?? DEFAULT_MODEL,
+    options.ollamaUrl ?? DEFAULT_URL,
+  );
+  return provider.isAvailable();
+}
+
+/**
+ * Summarize a single cluster using the given provider.
  */
 async function summarizeOne(
   cluster: SuggestionCluster,
-  options: SummarizerOptions,
+  provider: SummarizerProvider,
 ): Promise<string | null> {
-  const url = options.ollamaUrl ?? DEFAULT_URL;
-  const model = options.model ?? DEFAULT_MODEL;
-
   const rationales = cluster.rationales
     .map((r) => `${r.agent}: ${r.rationale}`)
     .join("\n");
 
-  try {
-    const res = await fetch(`${url}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: `Summarize this code finding in exactly one sentence. Be concise and specific. No preamble.\n\n${rationales}`,
-          },
-        ],
-        stream: false,
-      }),
-    });
-
-    if (!res.ok) return null;
-
-    const data = await res.json() as {
-      message?: { content?: string };
-    };
-
-    const content = data.message?.content?.trim();
-    if (!content) return null;
-
-    return content;
-  } catch (err) {
-    log("warn", "Ollama summary failed", { error: String(err), cluster: cluster.id });
-    return null;
-  }
+  const prompt = `Summarize this code finding in exactly one sentence. Be concise and specific. No preamble.\n\n${rationales}`;
+  return provider.complete(prompt);
 }
 
 /**
@@ -91,10 +103,16 @@ export async function summarizeClusters(
   clusters: SuggestionCluster[],
   options: SummarizerOptions = {},
 ): Promise<number> {
-  const available = await isOllamaAvailable(options);
+  const modelStr = options.model ?? DEFAULT_MODEL;
+  const parsed = parseModelSpec(modelStr);
+  const provider = await resolveProvider(parsed, options.ollamaUrl);
+
+  const available = await provider.isAvailable();
   if (!available) {
-    const model = options.model ?? DEFAULT_MODEL;
-    log("info", "Ollama not available, skipping summaries", { model });
+    log("info", "Summarizer not available, skipping summaries", {
+      provider: parsed.provider,
+      model: parsed.model,
+    });
     return 0;
   }
 
@@ -113,7 +131,7 @@ export async function summarizeClusters(
       status: "started",
     });
 
-    const summary = await summarizeOne(cluster, options);
+    const summary = await summarizeOne(cluster, provider);
     if (summary) {
       cluster.summary = summary;
       count++;

@@ -47,9 +47,10 @@
       "description": "Per-agent model overrides for fixes (falls back to models if not set)",
       "additionalProperties": { "type": "string" }
     },
-    "reviewer": {
-      "type": "string",
-      "description": "Default agent for --validate reviews (e.g. \"claude\")"
+    "reviewers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Reviewer agent pool for --validate reviews (e.g. [\"claude\", \"gemini\"])"
     },
     "concurrency": {
       "type": "integer",
@@ -63,7 +64,7 @@
     },
     "summarizerModel": {
       "type": "string",
-      "description": "Ollama model for LLM summaries (default: gemma3:1b)"
+      "description": "Model for LLM summaries. Use 'openrouter:<org>/<model>' for remote (e.g. 'openrouter:openai/gpt-4o-mini'), or bare name for Ollama (default: gemma3:1b)"
     },
     "maxSweepRounds": {
       "type": "integer",

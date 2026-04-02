@@ -17,7 +17,7 @@ export interface KaichoConfig {
   minSeverity?: string;
   models?: Record<string, string>;
   fixModels?: Record<string, string>;
-  reviewer?: string;
+  reviewers?: string[];
   concurrency?: number;
   retention?: number;
   summarizerModel?: string;
@@ -68,7 +68,7 @@ async function loadConfigFile(configPath: string): Promise<KaichoConfig> {
       minSeverity: str(raw["minSeverity"]),
       models: isModelsMap(raw["models"]) ? raw["models"] : undefined,
       fixModels: isModelsMap(raw["fixModels"]) ? raw["fixModels"] : undefined,
-      reviewer: str(raw["reviewer"]),
+      reviewers: parseReviewer(raw["reviewers"]),
       concurrency: num(raw["concurrency"]),
       retention: num(raw["retention"]),
       summarizerModel: str(raw["summarizerModel"]),
@@ -98,6 +98,15 @@ function num(val: unknown): number | undefined {
 
 function isStringArray(val: unknown): val is string[] {
   return Array.isArray(val) && val.length > 0 && val.every((v) => typeof v === "string");
+}
+
+/** Accept "a, b" (string) or ["a","b"] (array) and normalize to string[]. */
+function parseReviewer(val: unknown): string[] | undefined {
+  if (isStringArray(val)) return val;
+  if (typeof val === "string" && val !== "") {
+    return val.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return undefined;
 }
 
 /**

@@ -83,7 +83,7 @@ export interface ParallelFixOptions {
   auto?: boolean;
   verbose?: boolean;
   validate?: boolean;
-  reviewer?: string;
+  reviewers?: string[];
   fixLogPath?: string;
   onProgress?: (progress: ParallelFixProgress) => void;
   onConfirm?: (
@@ -219,7 +219,7 @@ async function executeFixInWorktree(
         fixAgent: agentName,
         timeoutMs: options.timeoutMs,
         models: options.models,
-        reviewer: options.reviewer,
+        reviewers: options.reviewers,
         verbose: options.verbose,
         fixerContext,
         repoContext,

@@ -34,7 +34,7 @@ export const fixCommand = new Command("fix")
   .option("--timeout <ms>", "Agent timeout in milliseconds", "1800000")
   .option("--min-severity <level>", "Minimum severity to show")
   .option("--validate", "Run a second agent to review each fix before keeping")
-  .option("--reviewer <agents>", "Reviewer agent or comma-separated pool (default: auto-pick)")
+  .option("--reviewers <agents>", "Reviewer agent pool, comma-separated (default: auto-pick)")
   .option("--batch", "Fix all findings on one branch (continue/skip/stop after each)")
   .option("--auto", "Batch fix without confirmations")
   .option("--verbose", "Show agent stderr output in real-time")
@@ -166,7 +166,9 @@ export const fixCommand = new Command("fix")
     // Validate with a second agent if requested
     if (opts.validate && result.diff) {
       process.stdout.write(`  ${color("Validating...", "\x1b[90m")}\n`);
-      const reviewerOverride = (opts.reviewer as string | undefined) ?? config.reviewer;
+      const reviewerOverride = opts.reviewers
+        ? (opts.reviewers as string).split(",").map((s: string) => s.trim())
+        : config.reviewers;
       const validation = await runValidation({
         repoPath: rawRepo,
         cluster,
@@ -174,7 +176,7 @@ export const fixCommand = new Command("fix")
         fixAgent: agentName,
         timeoutMs: parseInt(opts.timeout as string, 10),
         models: config.fixModels ?? config.models,
-        reviewer: reviewerOverride,
+        reviewers: reviewerOverride,
         verbose: opts.verbose === true,
         fixerContext: result.fixerContext,
       });
@@ -212,7 +214,7 @@ export const fixCommand = new Command("fix")
               fixAgent: validation.reviewer,
               timeoutMs: parseInt(opts.timeout as string, 10),
               models: config.fixModels ?? config.models,
-              reviewer: reviewerOverride,
+              reviewers: reviewerOverride,
               verbose: opts.verbose === true,
             });
 
