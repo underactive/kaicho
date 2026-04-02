@@ -25,6 +25,8 @@ export interface ScanOptions {
   exclude?: string[];
   task: string;
   repoPath: string;
+  /** Path to store results in (defaults to repoPath). Use when scanning a worktree but storing in the original repo. */
+  storePath?: string;
   timeoutMs?: number;
   scope?: string;
   files?: string;
@@ -226,8 +228,9 @@ export async function runScan(options: ScanOptions): Promise<MultiScanResult> {
     }];
   });
 
-  // Save each result
-  const store = new SqliteStore(absRepoPath);
+  // Save each result (use storePath for DB location, absRepoPath as recorded repo)
+  const dbPath = options.storePath ? path.resolve(options.storePath) : absRepoPath;
+  const store = new SqliteStore(dbPath);
   try {
     for (const result of results) {
       if (result.status === "skipped") continue;

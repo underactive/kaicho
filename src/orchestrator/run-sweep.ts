@@ -36,6 +36,7 @@ async function scanLayer(
   layer: SweepLayer,
   absRepoPath: string,
   options: SweepOptions,
+  storePath?: string,
 ): Promise<{ clusters: SuggestionCluster[]; scanResults: MultiScanResult[] }> {
   const allClusters: SuggestionCluster[] = [];
   const scanResults: MultiScanResult[] = [];
@@ -46,6 +47,7 @@ async function scanLayer(
       exclude: options.exclude,
       task,
       repoPath: absRepoPath,
+      storePath,
       timeoutMs: options.timeoutMs,
       models: options.scanModels ?? options.models,
       onProgress: options.onScanProgress
@@ -139,7 +141,7 @@ async function executeLayer(
   options.onLayerStart?.(round, layer);
 
   // 1. Scan (from worktree)
-  const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
+  const { clusters } = await scanLayer(layer, sweepWorktreePath, options, absRepoPath);
   log("info", "Layer scan complete", {
     round,
     layer: layer.layer,
@@ -217,7 +219,7 @@ async function executeLayer(
   if (mergedBranches.length > 0 && prevLayers.length > 0) {
     log("info", "Re-scanning layer for regression baseline", { layer: layer.layer, tasks: layer.tasks });
     options.onScanProgress?.({ agent: "sweep", status: "started", task: `baseline-rescan:${layer.tasks.join(",")}` });
-    criticalHigh = countCriticalHigh((await scanLayer(layer, sweepWorktreePath, options)).clusters);
+    criticalHigh = countCriticalHigh((await scanLayer(layer, sweepWorktreePath, options, absRepoPath)).clusters);
   } else {
     criticalHigh = countCriticalHigh(clusters);
   }
@@ -385,8 +387,8 @@ async function runTwoPassSweep(
     let criticalHighRemaining = 0;
     try {
       options.onScanProgress?.({ agent: "sweep", status: "started", task: "exit-condition-check" });
-      const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
-      const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
+      const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options, absRepoPath);
+      const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options, absRepoPath);
       criticalHighRemaining = countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
     } catch (err) {
       log("warn", "Exit condition scan failed", { error: String(err) });
@@ -517,8 +519,8 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
       if (round < maxRounds) {
         try {
           options.onScanProgress?.({ agent: "sweep", status: "started", task: "exit-condition-check" });
-          const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options);
-          const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options);
+          const secScan = await scanLayer(SWEEP_LAYERS[0]!, sweepWorktreePath, options, absRepoPath);
+          const qaScan = await scanLayer(SWEEP_LAYERS[1]!, sweepWorktreePath, options, absRepoPath);
           const remainingCriticalHigh =
             countCriticalHigh(secScan.clusters) + countCriticalHigh(qaScan.clusters);
           roundResult.criticalHighRemaining = remainingCriticalHigh;
@@ -545,7 +547,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
   if (options.finalScan) {
     options.onScanProgress?.({ agent: "sweep", status: "started", task: "final-scan" });
     for (const layer of SWEEP_LAYERS) {
-      const { clusters } = await scanLayer(layer, sweepWorktreePath, options);
+      const { clusters } = await scanLayer(layer, sweepWorktreePath, options, absRepoPath);
       const unfixed = await filterFixed(clusters, absRepoPath);
       for (const c of unfixed) {
         remaining.push({
