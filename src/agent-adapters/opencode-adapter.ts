@@ -38,10 +38,16 @@ export class OpenCodeAdapter implements AgentAdapter {
           ? READ_ONLY_PREFIX + prompt
           : prompt;
 
-      const args = ["run", "--format", "json"];
+      const resolvedModel = this.config.model
+        ? this.resolveModel(this.config.model)
+        : undefined;
 
-      if (this.config.model) {
-        args.push("-m", this.resolveModel(this.config.model));
+      // Skip --format json for OpenRouter models — it causes hangs
+      const useJsonFormat = !resolvedModel?.startsWith("openrouter/");
+      const args = useJsonFormat ? ["run", "--format", "json"] : ["run"];
+
+      if (resolvedModel) {
+        args.push("-m", resolvedModel);
       }
 
       args.push(effectivePrompt);

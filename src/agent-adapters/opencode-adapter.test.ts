@@ -188,7 +188,7 @@ describe("OpenCodeAdapter", () => {
       expect(capturedArgs[mIndex + 1]).toBe("anthropic/claude-sonnet-4-20250514");
     });
 
-    it("uses --format json flag", async () => {
+    it("uses --format json for non-OpenRouter models", async () => {
       let capturedArgs: string[] = [];
       mockExecaImpl((_command: string, args?: string[]) => {
         if (args) capturedArgs = args;
@@ -205,6 +205,26 @@ describe("OpenCodeAdapter", () => {
 
       expect(capturedArgs).toContain("--format");
       expect(capturedArgs[capturedArgs.indexOf("--format") + 1]).toBe("json");
+    });
+
+    it("skips --format json for OpenRouter models", async () => {
+      let capturedArgs: string[] = [];
+      mockExecaImpl((_command: string, args?: string[]) => {
+        if (args) capturedArgs = args;
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: '{"suggestions":[]}',
+          stderr: "",
+          timedOut: false,
+        });
+      });
+
+      const adapter = new OpenCodeAdapter({ model: "openrouter/deepseek/deepseek-v3.2" });
+      await adapter.run("/test/repo", "scan");
+
+      expect(capturedArgs).not.toContain("--format");
+      expect(capturedArgs).toContain("-m");
+      expect(capturedArgs[capturedArgs.indexOf("-m") + 1]).toBe("openrouter/deepseek/deepseek-v3.2");
     });
 
     it("never throws", async () => {
