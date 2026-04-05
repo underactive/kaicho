@@ -1,4 +1,4 @@
-import type { SweepReport, RunRecord, SuggestionCluster, FixLogEntry } from "./types";
+import type { SweepReport, RunRecord, SuggestionCluster, FixLogEntry, DiscardedFixEntry } from "./types";
 
 const BASE = "/api";
 
@@ -25,4 +25,5 @@ export const api = {
     return get<SuggestionCluster[]>(`/clusters${qs ? `?${qs}` : ""}`);
   },
   fixed: () => get<FixLogEntry[]>("/fixed"),
+  discarded: () => get<DiscardedFixEntry[]>("/discarded"),
 };

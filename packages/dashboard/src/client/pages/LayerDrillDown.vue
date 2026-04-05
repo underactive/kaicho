@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import type { SweepRemaining, SweepLayerResult, FixLogEntry } from "../types";
+import type { SweepRemaining, SweepLayerResult, FixLogEntry, DiscardedFixEntry } from "../types";
 import { LAYER_LABELS, LAYER_TASKS, SEVERITY_TEXT_COLORS } from "../types";
 import SeverityBadge from "../components/SeverityBadge.vue";
 import SeverityBar from "../components/SeverityBar.vue";
@@ -16,8 +16,15 @@ interface LayerDetail {
   remaining: SweepRemaining[];
   layerResults: Array<{ round: number; pass?: 1 | 2; result: SweepLayerResult }>;
   fixLog: FixLogEntry[];
+  discardedFixes: DiscardedFixEntry[];
   sweepBranch: string;
 }
+
+const DISCARD_REASON_LABELS: Record<string, string> = {
+  "user-discard": "Discarded by user",
+  "auto-concern": "Reviewer flagged concern",
+  "retry-failed": "Retry failed",
+};
 
 const data = ref<LayerDetail | null>(null);
 const loading = ref(true);
@@ -72,6 +79,16 @@ const groupedByFile = computed(() => {
     }
   }
   return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+});
+
+// Map clusterId → discarded fix entry for quick lookup
+const discardedByCluster = computed(() => {
+  if (!data.value?.discardedFixes) return new Map<string, DiscardedFixEntry>();
+  const map = new Map<string, DiscardedFixEntry>();
+  for (const d of data.value.discardedFixes) {
+    map.set(d.clusterId, d);
+  }
+  return map;
 });
 
 const expanded = ref<string | null>(null);
@@ -245,7 +262,52 @@ function diffLineClass(line: string): string {
                   }">
                     {{ item.reason }}
                   </span>
+                  <!-- Discard reason badge -->
+                  <span
+                    v-if="discardedByCluster.get(item.clusterId)"
+                    class="text-xs mt-1 ml-2 inline-block text-red-400"
+                  >
+                    {{ DISCARD_REASON_LABELS[discardedByCluster.get(item.clusterId)!.reason] ?? discardedByCluster.get(item.clusterId)!.reason }}
+                  </span>
                 </div>
+              </div>
+              <!-- Expanded: show discard context -->
+              <div
+                v-if="expanded === item.clusterId && discardedByCluster.get(item.clusterId)"
+                class="mt-3 ml-4 border-l border-zinc-800 pl-3 space-y-2 text-xs"
+              >
+                <div class="text-zinc-500">
+                  Fix attempted by
+                  <span class="text-zinc-300 font-medium">{{ discardedByCluster.get(item.clusterId)!.fixAgent }}</span>
+                  <span class="text-zinc-600 ml-1">{{ discardedByCluster.get(item.clusterId)!.discardedAt }}</span>
+                </div>
+                <div v-if="discardedByCluster.get(item.clusterId)!.reviewer" class="text-zinc-500">
+                  Reviewed by
+                  <span class="text-zinc-300 font-medium">{{ discardedByCluster.get(item.clusterId)!.reviewer }}</span>
+                  <span v-if="discardedByCluster.get(item.clusterId)!.verdict" class="ml-1" :class="{
+                    'text-red-400': discardedByCluster.get(item.clusterId)!.verdict === 'concern',
+                    'text-green-400': discardedByCluster.get(item.clusterId)!.verdict === 'approve',
+                    'text-zinc-400': true,
+                  }">
+                    ({{ discardedByCluster.get(item.clusterId)!.verdict }})
+                  </span>
+                </div>
+                <div v-if="discardedByCluster.get(item.clusterId)!.reviewerRationale">
+                  <span class="text-zinc-500">Reviewer notes:</span>
+                  <p class="text-zinc-300 mt-1">{{ discardedByCluster.get(item.clusterId)!.reviewerRationale }}</p>
+                </div>
+                <div v-if="discardedByCluster.get(item.clusterId)!.fixerContext">
+                  <span class="text-zinc-500">Fixer context:</span>
+                  <p class="text-zinc-400 mt-1">{{ discardedByCluster.get(item.clusterId)!.fixerContext }}</p>
+                </div>
+                <div v-if="discardedByCluster.get(item.clusterId)!.retryAttempted" class="text-zinc-600 italic">
+                  A retry was attempted
+                </div>
+                <details class="mt-1">
+                  <summary class="text-zinc-600 cursor-pointer hover:text-zinc-400">Attempted diff</summary>
+                  <pre class="text-xs mt-1 overflow-x-auto max-h-64 overflow-y-auto font-mono leading-relaxed bg-zinc-900 rounded p-2"><template v-for="(line, i) in diffLines(discardedByCluster.get(item.clusterId)!.fixDiff)" :key="i"><span :class="diffLineClass(line)">{{ line }}
+</span></template></pre>
+                </details>
               </div>
             </div>
           </div>

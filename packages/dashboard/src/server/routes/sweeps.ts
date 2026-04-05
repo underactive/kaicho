@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import { readSweepReports, readSweepReport } from "../readers/sweep-reader.js";
-import { readFixLog } from "../readers/fix-reader.js";
+import { readFixLog, readDiscardedLog } from "../readers/fix-reader.js";
 import { SWEEP_LAYERS } from "../types.js";
 
 export function sweepRoutes(db: Database.Database): Hono {
@@ -50,12 +50,18 @@ export function sweepRoutes(db: Database.Database): Hono {
     // Get fixed entries
     const fixLog = readFixLog(db);
 
+    // Get discarded fix entries for remaining items
+    const allDiscarded = readDiscardedLog(db);
+    const remainingIds = new Set(remaining.map((r) => r.clusterId));
+    const discardedFixes = allDiscarded.filter((d) => remainingIds.has(d.clusterId));
+
     return c.json({
       layer: layerNum,
       tasks: [...tasks],
       remaining,
       layerResults,
       fixLog,
+      discardedFixes,
       sweepBranch: report.sweepBranch,
     });
   });

@@ -52,6 +52,24 @@ export interface FixLogEntry {
   diff?: string;
 }
 
+export interface DiscardedFixEntry {
+  clusterId: string;
+  file: string;
+  line: number | null;
+  category: string;
+  severity: string;
+  summary: string | null;
+  fixAgent: string;
+  fixDiff: string;
+  fixerContext: string | null;
+  reviewer: string | null;
+  verdict: string | null;
+  reviewerRationale: string | null;
+  retryAttempted: boolean;
+  discardedAt: string;
+  reason: "user-discard" | "auto-concern" | "retry-failed";
+}
+
 export interface SweepLayerResult {
   layer: number;
   tasks: string[];
