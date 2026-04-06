@@ -1,7 +1,7 @@
 # Kaicho — Project History
 
-96 commits. 3 days. One developer. 11,700 lines of TypeScript across 97 files.
-296 tests. 4 AI coding agents wired together into a single orchestrator.
+149 commits. 10 days. One developer. 16,500 lines of TypeScript across 112 files.
+481 tests. 5 AI coding agents wired together into a single orchestrator.
 
 This document traces Kaicho from its first commit to the present, organized
 by the major phases of development.
@@ -25,6 +25,12 @@ by the major phases of development.
 | Mar 28 21:07 | 11 tasks | performance, resilience, logging |
 | Mar 28 21:39 | Sweep | Multi-round layered scan-fix-verify loop |
 | Mar 29 00:54 | Batched fix | File-disjoint execution with informed grouping |
+| Mar 29 | Sweep hardening | Worktree isolation, squash merge, progress reporting |
+| Mar 30 | Robustness | Regression flag-and-continue, parse normalization |
+| Mar 31 | Freeform parsing | Drop structured output, FP filtering, two-pass sweep |
+| Apr 1  | Dashboard & SQLite | Web dashboard, OpenCode adapter, SQLite storage |
+| Apr 2–3 | OpenRouter | Remote summarizer, reviewer pool rename |
+| Apr 5  | 0.1.1 | Patch release — dashboard polish, 149 commits |
 
 ---
 
@@ -373,18 +379,176 @@ and `kaicho sweep`.
 
 ---
 
+## Sweep hardening (Mar 29)
+
+**Commits:** `e7c23a0` → `1325b02` (13 commits)
+
+With the sweep loop live, real-world usage against production repos exposed
+a wave of reliability issues. This was a stabilization push.
+
+### Squash merge & fingerprinting (`e7c23a0`)
+
+Fix branches switched from regular merge to squash merge, producing cleaner
+history. Per-component fingerprinting landed in the same commit — in monorepos,
+each workspace package now gets its own `RepoContext` block in the prompt.
+Language detection expanded to cover Python, Rust, Go, Java, C/C++, and more.
+
+### Sweep worktree isolation (`818b669`, `c97729e`)
+
+Sweeps now run in a dedicated git worktree, protecting the user's working tree
+from in-progress fix branches. *Rationale: Users were unable to do other work
+in the repo while a multi-hour sweep was running.*
+
+### Progress reporting (`d70f3e9`)
+
+Global fix progress events (per-cluster start/pass/fail/skip) for both sweep
+and batched fix, replacing the previous per-batch-only progress.
+
+### Regression handling (`82cfd54`, `93d50f9`)
+
+Auto-revert on regression was replaced with flag-and-continue. Layer tags
+(`kaicho/layer-<name>`) mark the sweep branch after each layer, enabling
+selective manual revert without losing all progress. *Rationale: Auto-revert
+was too aggressive — it discarded valid fixes when an agent introduced a
+single new finding.*
+
+---
+
+## Parse boundary hardening (Mar 30)
+
+**Commits:** `49d7581` → `46e04df` (6 commits)
+
+Agents invent their own category and severity labels. This batch normalized
+everything at the parse boundary:
+
+- Capitalized values (`"High"`, `"SECURITY"`) lowercased
+- Agent-invented categories (`"vulnerability"`, `"error-handling"`) mapped
+  to valid enum values
+- Unknown categories mapped to `bug` instead of being rejected
+- Model specifiers stripped from agent display names in commit messages
+
+---
+
+## Freeform parsing & prompt refinement (Mar 31)
+
+**Commits:** `57a6d07` → `535778a` (22 commits)
+
+The biggest single-day push since Phase 0. Two major architectural changes
+plus a wave of sweep operational fixes.
+
+### Serial-phase batching (`57a6d07`)
+
+When multiple clusters target the same file, they're now grouped into a single
+agent session instead of sequential separate invocations. The agent sees all
+findings at once and applies a coherent fix. *Rationale: Sequential same-file
+fixes caused cascading merge conflicts as line numbers shifted.*
+
+### Freeform parsing (`4510c46`)
+
+Dropped `--json-schema` and structured output enforcement from all adapters.
+Every agent now returns freeform text, parsed post-hoc via multi-strategy
+extraction (direct JSON → code fences → brace extraction). This was the
+biggest reliability win of the project — structured output modes were silently
+failing across agents, especially with larger models.
+
+### FP filtering & confidence gating (`f5c6e1d`)
+
+All 11 scan prompts gained:
+- An explicit exclusions list (DoS, test files, ReDoS on trusted input, etc.)
+- A confidence gate (80% threshold)
+- A phased analysis methodology (understand context → compare patterns → assess impact)
+
+### Two-pass sweep (`535778a`)
+
+`--two-pass` flag: first pass speed-runs all layers, second pass does a
+thorough security + QA re-scan. *Rationale: The single-pass approach spent too
+long on low-priority layers before catching critical regressions.*
+
+### Cursor file-lock serialization (`f74a6ac`, `e905a02`)
+
+Same-CLI agent variants (e.g., `cursor:composer-1` and `cursor:composer-2`)
+now run sequentially via a shared promise chain. The Cursor CLI writes a global
+`~/.cursor/cli-config.json` at startup — parallel invocations caused file-lock
+races and corrupted configs.
+
+### Claude reformat retry (`2607a34`)
+
+When a Claude scan returns prose instead of JSON, the adapter now makes a
+second call asking Claude to extract and reformat the findings. This catches
+the common case where Claude produces a valid analysis but wraps it in markdown
+instead of raw JSON.
+
+---
+
+## Dashboard, OpenCode & SQLite (Apr 1)
+
+**Commits:** `cbaaa03` → `807ab67` (16 commits)
+
+### Web dashboard (`c75bd5c`)
+
+A `@kaicho/dashboard` workspace package providing a local web UI for browsing
+scan results, fix logs, and discarded fix rationale. Built as a SPA served
+from the CLI.
+
+### OpenCode adapter (`860ca58`)
+
+Fifth agent adapter. OpenCode CLI provides access to free-tier models via
+OpenRouter, expanding the agent pool without additional API costs. Model names
+with a `/` prefix (e.g., `openrouter/qwen/qwen3-coder:free`) pass through
+as-is; bare names get an `opencode/` prefix.
+
+### SQLite storage (`fba786c`)
+
+Replaced the per-run JSON file storage with SQLite. Scan results, fix logs,
+and enrichment data now live in `.kaicho/kaicho.db`. Added an agent severity
+distribution chart to the dashboard. *Rationale: JSON files were O(n) for
+lookups and growing unwieldy with 100+ scan runs per repo.*
+
+### Sweep polish
+
+- TTY status messages for all sweep phase transitions (`cbaaa03`)
+- Manual actions surfaced at end of sweep (`2967cd4`)
+- Sweep DB writes fixed to target original repo during worktree execution (`caaa313`)
+- Grouped fix commit messages reformatted with individual cluster reports (`fa02654`)
+
+---
+
+## OpenRouter & config polish (Apr 2–5)
+
+**Commits:** `0bcf0d1` → `807ab67`
+
+### OpenRouter summarizer (`0bcf0d1`)
+
+The summarizer now supports remote models via OpenRouter in addition to local
+Ollama. Config: `"summarizerModel": "openrouter:openai/gpt-4o-mini"`. Requires
+`OPENROUTER_API_KEY`. The `reviewer` config key was renamed to `reviewers`
+(plural) for consistency with the CLI flag.
+
+### OpenCode + OpenRouter fix (`11ce057`)
+
+OpenRouter models served through OpenCode hang when `--format json` is passed.
+The adapter now detects `openrouter/` model prefixes and omits the JSON format
+flag, falling back to text parsing.
+
+### Dashboard discard reasons (`807ab67`)
+
+Unfixed findings in the dashboard now show why they were skipped (merge
+conflict, reviewer rejection, timeout, etc.).
+
+---
+
 ## By the numbers
 
 | Metric | Count |
 |--------|-------|
-| Total commits | 96 |
-| Calendar days | 3 (Mar 26–29, 2026) |
-| Source files | 74 |
-| Test files | 23 |
-| Total TypeScript lines | ~11,700 |
-| Tests | 296 |
+| Total commits | 149 |
+| Calendar days | 10 (Mar 26 – Apr 5, 2026) |
+| Source files | 85 |
+| Test files | 27 |
+| Total TypeScript lines | ~16,500 |
+| Tests | 481 |
 | Scan tasks | 11 |
-| Agent adapters | 4 (Claude, Codex, Cursor, Gemini) |
+| Agent adapters | 5 (Claude, Codex, Cursor, Gemini, OpenCode) |
 | CLI commands | scan, fix, report, list, init, enrich, sweep |
 | Execution plans written | 4 |
 | Reverts | 2 |

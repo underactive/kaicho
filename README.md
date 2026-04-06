@@ -2,7 +2,7 @@
 
 Run multiple AI coding agents against your repositories, collect structured suggestions, and apply fixes — all from one CLI.
 
-Kaicho orchestrates Claude, Codex, Cursor, and Gemini in parallel, normalizes their output, deduplicates across agents, and lets you fix issues on isolated git branches.
+Kaicho orchestrates Claude, Codex, Cursor, Gemini, and OpenCode in parallel, normalizes their output, deduplicates across agents, and lets you fix issues on isolated git branches.
 
 ## Why
 
@@ -22,8 +22,9 @@ Requires Node.js >= 20 and at least one of:
 - [Codex CLI](https://github.com/openai/codex) (`codex`)
 - [Cursor Agent](https://cursor.com/cli) (`agent`)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`gemini`)
+- [OpenCode](https://github.com/opencode-ai/opencode) (`opencode`)
 
-Optional: [Ollama](https://ollama.ai) with `gemma3:1b` for local LLM summaries.
+Optional: [Ollama](https://ollama.ai) with `gemma3:1b` for local LLM summaries, or set `OPENROUTER_API_KEY` for remote summarization via OpenRouter.
 
 Check what you have installed:
 

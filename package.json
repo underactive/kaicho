@@ -1,6 +1,6 @@
 {
   "name": "kaicho",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run AI coding agents against repos and collect structured suggestions",
   "type": "module",
   "workspaces": [
